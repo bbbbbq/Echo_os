@@ -1,0 +1,23 @@
+[workspace]
+members = [ "component/bitmap", "component/boot", "component/config", 
+    "component/console", "component/driver/virtio", "component/frame", 
+    "component/heap", "kernel"
+]
+resolver = "2"
+
+[workspace.dependencies]
+log = { version = "0.4", default-features = false }  # 禁用std依赖
+spin = "0.9"
+bitflags = "2.4"
+page_table_multiarch = "0.5.3"
+config ={ path = "component/config" }
+console = { path = "component/console"}
+boot = { path = "component/boot" }
+memory_addr = "0.3.2"
+lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
+bitmap = { path = "component/bitmap" }
+flat_device_tree = "3.1.1"
+frame = { path = "component/frame"}
+virtio-drivers = { version = "0.8" }
+virtio = { path = "component/driver/virtio" }
+heap ={ path = "component/heap" }

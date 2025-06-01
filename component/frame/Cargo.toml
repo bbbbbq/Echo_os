@@ -1,0 +1,12 @@
+[package]
+name = "frame"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+config = { workspace = true }
+memory_addr = { workspace = true }
+lazy_static = { workspace = true }
+spin = { version = "0.9.8" }
+bitmap = { workspace = true }
+log = { workspace = true }

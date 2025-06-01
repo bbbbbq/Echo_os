@@ -1,0 +1,14 @@
+[package]
+name = "kernel"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+boot = { workspace = true }
+console = { workspace = true }
+flat_device_tree = { workspace = true }
+virtio = { workspace = true }
+heap = { workspace = true }
+log = { workspace = true }
+virtio-drivers  = { workspace = true }
+frame = { workspace = true }
