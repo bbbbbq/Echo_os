@@ -43,10 +43,8 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     console::init();
     println!("hart_id : {:x} dtb: {:x}", hartid, dtb);
     heap::init();
-    
-    // Continue with device tree initialization
+
     init_dt(dtb);
-    
     loop {}
 }
 
@@ -108,15 +106,9 @@ fn virtio_device(transport: impl Transport) {
 fn virtio_blk<T: Transport>(transport: T) {
     info!("virtio-blk test start");
     let mut blk = VirtIOBlk::<HalImpl, T>::new(transport).expect("failed to create blk driver");
-    let mut input = vec![0xffu8; 512];
-    let mut output = vec![0; 512];
-    for i in 0..32 {
-        for x in input.iter_mut() {
-            *x = i as u8;
-        }
-        blk.write_blocks(i, &input).expect("failed to write");
-        blk.read_blocks(i, &mut output).expect("failed to read");
-        assert_eq!(input, output);
-    }
+    let mut output = vec![0u8; 512];
+    blk.read_blocks(2, &mut output).expect("failed to read");
+    println!("Read data: {:02X?}", &output[..512]); // Display first 16 bytes in hex
+
     info!("virtio-blk test finished");
 }

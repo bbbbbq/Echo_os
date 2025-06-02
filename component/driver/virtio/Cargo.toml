@@ -12,3 +12,6 @@ core = { package = "rustc-std-workspace-core", version = "1.0.0", optional = tru
 memory_addr = { workspace = true }
 config = { workspace = true }
 log = { workspace = true }
+device = { workspace = true }
+UintAllocator = { workspace = true }
+lazy_static = { workspace = true }

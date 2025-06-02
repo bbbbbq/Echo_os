@@ -103,6 +103,10 @@ impl FrameAllocator {
     }
 
     pub fn dealloc_continues(&mut self, base_frame: FrameTracer, count: usize) -> bool {
+        if base_frame.paddr.as_usize() < self.start.as_usize() {
+            return false;
+        }
+        
         let base_idx = (base_frame.paddr.as_usize() - self.start.as_usize()) / PAGE_SIZE;
         if base_idx + count > self.bitmap.len() {
             return false;

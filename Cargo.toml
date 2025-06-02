@@ -1,6 +1,6 @@
 [workspace]
-members = [ "component/bitmap", "component/boot", "component/config", 
-    "component/console", "component/driver/virtio", "component/frame", 
+members = [ "component/UintAllocator", "component/bitmap", "component/boot", "component/config", 
+    "component/console", "component/driver/device", "component/driver/virtio", "component/frame", 
     "component/heap", "kernel"
 ]
 resolver = "2"
@@ -21,3 +21,7 @@ frame = { path = "component/frame"}
 virtio-drivers = { version = "0.8" }
 virtio = { path = "component/driver/virtio" }
 heap ={ path = "component/heap" }
+downcast ={ version = "0.11.0",default-features = false}
+device = { path="component/driver/device" }
+UintAllocator = { path = "component/UintAllocator"}
+
