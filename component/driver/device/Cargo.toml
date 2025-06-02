@@ -9,3 +9,4 @@ spin = { workspace=true }
 log = { workspace = true }
 flat_device_tree = { workspace = true }
 virtio-drivers = { workspace = true }
+downcast-rs = { workspace = true }
