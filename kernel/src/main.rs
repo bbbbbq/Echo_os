@@ -44,24 +44,9 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     println!("hart_id : {:x} dtb: {:x}", hartid, dtb);
     heap::init();
     
-    info!("Running memory frame alignment tests...");
-    let (success, failure) = frame::test_frame_allocation();
-    if failure > 0 {
-        error!("Frame alignment tests failed: {} failures, {} successes", failure, success);
-    } else {
-        info!("All frame alignment tests passed: {} successes", success);
-    }
-    
-    // Test specifically the size needed for VirtIO (usually 2 pages)
-    let virtio_frames_aligned = frame::test_frame_alignment(2);
-    if virtio_frames_aligned {
-        info!("VirtIO frame alignment test passed");
-    } else {
-        error!("VirtIO frame alignment test failed - frames not properly aligned to 4K boundaries");
-    }
-    
     // Continue with device tree initialization
     init_dt(dtb);
+    
     loop {}
 }
 

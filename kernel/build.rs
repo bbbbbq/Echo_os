@@ -1,5 +1,8 @@
 use std::{env, io::Result};
 
+const loglevel:&str = "error";
+
+
 fn main() -> Result<()> {
     gen_linker_script()
 }
@@ -31,6 +34,7 @@ fn gen_linker_script() -> Result<()> {
     
     // Tell cargo to tell rustc to link using the script at the new path
     println!("cargo:rustc-link-arg=-T{}", script_path);
+    println!("cargo:rustc-env=LOG_LEVEL={}", loglevel);
     println!("cargo:rerun-if-env-changed=CARGO_CFG_KERNEL_BASE");
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=linker.ld");

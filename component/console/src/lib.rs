@@ -22,15 +22,13 @@ const COLOR_RESET: &str = "\x1b[0m";
 
 impl Log for NoStdLogger {
     fn enabled(&self, _metadata: &Metadata) -> bool {
-        true  // 启用所有级别日志
+        true
     }
 
     fn log(&self, record: &Record) {
         use core::fmt::Write;
-        // Using self-crate DebugWriter that's re-exported from riscv64 module
         let mut writer = crate::DebugWriter;
-        
-        // Select color based on log level
+
         let color = match record.level() {
             Level::Error => COLOR_RED,
             Level::Warn => COLOR_YELLOW,
@@ -72,11 +70,14 @@ macro_rules! print {
         let _ = write!(writer, $($arg)*);
     })
 }
-
-
-pub fn init()
-{
+pub fn init() {
     static LOGGER: NoStdLogger = NoStdLogger;
+    
+    // Directly set the log level to Error as requested in kernel/build.rs
+    let log_level = LevelFilter::Info;
+    
     set_logger(&LOGGER).unwrap();
-    set_max_level(LevelFilter::Trace);  // 设置日志级别
+    set_max_level(log_level);
+    
+    println!("Log level set to: {:?}", log_level);
 }

@@ -216,3 +216,31 @@ pub fn test_frame_allocation() -> (usize, usize) {
     );
     (success, failure)
 }
+
+pub fn test() -> (usize, usize) {
+    let mut success = 0;
+    let mut failure = 0;
+    
+    log::info!("Running memory frame alignment tests...");
+    let (s, f) = test_frame_allocation();
+    if f > 0 {
+        log::error!("Frame alignment tests failed: {} failures, {} successes", f, s);
+    } else {
+        log::info!("All frame alignment tests passed: {} successes", s);
+    }
+    
+    success += s;
+    failure += f;
+    
+    // Test specifically the size needed for VirtIO (usually 2 pages)
+    let virtio_frames_aligned = test_frame_alignment(2);
+    if virtio_frames_aligned {
+        log::info!("VirtIO frame alignment test passed");
+        success += 1;
+    } else {
+        log::error!("VirtIO frame alignment test failed - frames not properly aligned to 4K boundaries");
+        failure += 1;
+    }
+    
+    (success, failure)
+}
