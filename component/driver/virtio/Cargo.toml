@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+flat_device_tree = { workspace = true }
 frame = { workspace = true }
 virtio-drivers = { workspace = true }
 spin = { workspace = true }

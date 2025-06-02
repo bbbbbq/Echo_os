@@ -1,13 +1,17 @@
 extern crate alloc;
 
 use device::define::{BlockDriver, Driver, DeviceType};
+use alloc::boxed::Box;
 use virtio_drivers::device::blk::VirtIOBlk;
+use virtio_drivers::transport::mmio::{MmioTransport, VirtIOHeader};
 use virtio_drivers::transport::Transport;
 use spin::Mutex;
 use alloc::sync::Arc;
 use crate::halimpl::HalImpl;
 use UintAllocator::create_uint_allocator;
-
+use device::device_set::DEVICE_SET;
+use device::device_set::push_device;
+use log::info;
 
 pub struct VirtioBlkDriver<T>
 where
@@ -51,9 +55,7 @@ where
     }
 }
 
-
 create_uint_allocator!(VIRTIO_DRIVER_ID, 0, 1024);
-
 
 impl<T> VirtioBlkDriver<T>
 where
@@ -67,4 +69,17 @@ where
             id
         }
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn block_device(transport_ptr: *mut u8)
+{
+    // Reconstruct the transport from the raw pointer
+    let transport_box = unsafe { Box::from_raw(transport_ptr as *mut MmioTransport) };
+    let transport = *transport_box;
+    
+    let blk = VirtIOBlk::<HalImpl, MmioTransport>::new(transport).expect("failed to create blk driver");
+    let blk_device = Arc::new(VirtioBlkDriver::new(blk));
+    push_device(blk_device);
+    info!("Registered virtio block device");
 }

@@ -24,4 +24,3 @@ heap ={ path = "component/heap" }
 downcast ={ version = "0.11.0",default-features = false}
 device = { path="component/driver/device" }
 UintAllocator = { path = "component/UintAllocator"}
-

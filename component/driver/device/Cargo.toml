@@ -6,3 +6,6 @@ edition = "2024"
 [dependencies]
 lazy_static = { workspace=true }
 spin = { workspace=true }
+log = { workspace = true }
+flat_device_tree = { workspace = true }
+virtio-drivers = { workspace = true }
