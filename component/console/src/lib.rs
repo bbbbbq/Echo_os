@@ -74,7 +74,7 @@ pub fn init() {
     static LOGGER: NoStdLogger = NoStdLogger;
     
     // Directly set the log level to Error as requested in kernel/build.rs
-    let log_level = LevelFilter::Info;
+    let log_level = LevelFilter::Trace;
     
     set_logger(&LOGGER).unwrap();
     set_max_level(log_level);

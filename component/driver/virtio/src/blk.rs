@@ -2,6 +2,7 @@ extern crate alloc;
 
 use device::define::{BlockDriver, Driver, DeviceType};
 use alloc::boxed::Box;
+use core::any::Any;
 use virtio_drivers::device::blk::VirtIOBlk;
 use virtio_drivers::transport::mmio::{MmioTransport, VirtIOHeader};
 use virtio_drivers::transport::Transport;
@@ -11,7 +12,7 @@ use crate::halimpl::HalImpl;
 use UintAllocator::create_uint_allocator;
 use device::device_set::DEVICE_SET;
 use device::device_set::push_device;
-use log::info;
+use log::{info,trace};
 
 pub struct VirtioBlkDriver<T>
 where
@@ -23,7 +24,7 @@ where
 
 impl<T> Driver for VirtioBlkDriver<T>
 where
-    T: Transport + Send + Sync,
+    T: Transport + Send + Sync + 'static,
 {
     fn get_id(&self) -> usize
     {
@@ -34,11 +35,19 @@ where
     {
         DeviceType::Block
     }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_block_driver(&self) -> Option<&dyn BlockDriver> {
+        Some(self)
+    }
 }
 
 impl<T> BlockDriver for VirtioBlkDriver<T>
 where
-    T: Transport + Send + Sync,
+    T: Transport + Send + Sync + 'static,
 {
     fn read(&self, block_id: usize, buf: &mut [u8]) -> Result<(), &'static str> {
         match self.inner.lock().read_blocks(block_id as usize, buf) {
@@ -59,11 +68,12 @@ create_uint_allocator!(VIRTIO_DRIVER_ID, 0, 1024);
 
 impl<T> VirtioBlkDriver<T>
 where
-    T: Transport + Send + Sync,
+    T: Transport + Send + Sync + 'static,
 {
     pub fn new(inner: VirtIOBlk<HalImpl, T>) -> Self
     {
         let id = VIRTIO_DRIVER_ID.lock().alloc().expect("Failed to allocate driver ID");
+        trace!("Creating new VirtioBlkDriver with ID: {}", id);
         Self {
             inner: Mutex::new(inner),
             id
@@ -74,7 +84,6 @@ where
 #[unsafe(no_mangle)]
 pub extern "C" fn block_device(transport_ptr: *mut u8)
 {
-    // Reconstruct the transport from the raw pointer
     let transport_box = unsafe { Box::from_raw(transport_ptr as *mut MmioTransport) };
     let transport = *transport_box;
     
