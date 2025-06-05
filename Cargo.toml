@@ -1,6 +1,6 @@
 [workspace]
 members = [ "component/UintAllocator", "component/bitmap", "component/boot", "component/config", 
-    "component/console", "component/driver/device", "component/driver/virtio", "component/filesystem", "component/frame", 
+    "component/console", "component/driver/device", "component/driver/virtio", "component/driver/api", "component/filesystem", "component/frame", 
     "component/heap", "kernel"
 ]
 resolver = "2"

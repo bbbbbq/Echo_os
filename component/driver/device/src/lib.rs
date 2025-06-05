@@ -3,14 +3,14 @@
 extern crate log;
 extern crate alloc;
 
-pub mod define;
 pub mod device_set;
+pub use driver_api::{DeviceType, Driver, BlockDriver};
+pub use device_set::{DEVICE_SET, push_device, get_device, get_block_device};
 
 use alloc::boxed::Box;
 use flat_device_tree::{node::FdtNode, Fdt};
 use log::info;
-// Use virtio_drivers DeviceType directly rather than our local one
-use virtio_drivers::transport::DeviceType;
+// virtio_drivers::transport::DeviceType will be used via its full path
 use virtio_drivers::transport::mmio::MmioTransport;
 use log::warn;
 use core::ptr::NonNull;
@@ -54,15 +54,13 @@ pub fn virtio_probe(node: FdtNode) {
 }
 
 
-// External function without generic parameters
 unsafe extern "C" {
     fn block_device(transport: *mut u8);
 }
 
 pub fn virtio_device(transport: impl Transport + Send + Sync + 'static) {
     match transport.device_type() {
-        DeviceType::Block => {
-            // Convert transport to a raw pointer to pass to the C function
+        virtio_drivers::transport::DeviceType::Block => {
             let transport_box = Box::new(transport);
             let transport_ptr = Box::into_raw(transport_box) as *mut u8;
             unsafe { block_device(transport_ptr) };

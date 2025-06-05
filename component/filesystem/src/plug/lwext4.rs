@@ -2,7 +2,7 @@ use lwext4_rust;
 use lwext4_rust::bindings::{O_WRONLY, O_CREAT, O_TRUNC, O_RDWR, SEEK_SET};
 
 use device::device_set::get_device;
-use device::define::{DeviceType as EchoDeviceType, BlockDriver}; // Removed Driver
+use device::{DeviceType as EchoDeviceType, BlockDriver}; // Removed Driver, define module removed
 use virtio::blk::VirtioBlkDriver;
 use virtio_drivers::transport::mmio::MmioTransport;
 use alloc::format;

@@ -1,12 +1,11 @@
 use lazy_static::*;
 use spin::Mutex;
-use super::define::Driver;
+use crate::Driver;
 extern crate alloc;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use crate::define::DeviceType;
-use virtio_drivers::transport::DeviceType as VirtioDeviceType;
-
+use crate::DeviceType;
+use crate::BlockDriver; // For the new get_block_device function
 
 lazy_static!
 {
@@ -27,4 +26,16 @@ pub fn get_device(id: usize) -> Option<Arc<dyn Driver>> {
         }
     }
     None
+}
+
+
+pub fn get_block_device(id: usize) -> Option<Arc<dyn BlockDriver>> {
+    let device_arc = get_device(id)?;
+
+    if device_arc.get_type() == DeviceType::Block {
+        // Attempt to convert to the BlockDriver trait object using the object-safe method.
+        device_arc.try_get_block_driver()
+    } else {
+        None // Not a block device
+    }
 }

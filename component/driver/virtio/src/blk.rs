@@ -1,6 +1,6 @@
 extern crate alloc;
 
-use device::define::{BlockDriver, Driver, DeviceType};
+use driver_api::{BlockDriver, Driver, DeviceType};
 use alloc::boxed::Box;
 use core::any::Any;
 use virtio_drivers::device::blk::VirtIOBlk;
@@ -10,8 +10,8 @@ use spin::Mutex;
 use alloc::sync::Arc;
 use crate::halimpl::HalImpl;
 use UintAllocator::create_uint_allocator;
-use device::device_set::DEVICE_SET;
-use device::device_set::push_device;
+use device_set::DEVICE_SET; // Renamed in Cargo.toml for virtio crate
+use device_set::push_device; // Renamed in Cargo.toml for virtio crate
 use log::{info,trace};
 
 pub struct VirtioBlkDriver<T>
@@ -38,6 +38,13 @@ where
     
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn try_get_block_driver(self: Arc<Self>) -> Option<Arc<dyn BlockDriver>>
+    where
+        Self: Sized + 'static, // 'static is often needed for Arc<dyn Trait>
+    {
+        Some(self) // VirtioBlkDriver is a BlockDriver.
     }
 }
 
@@ -89,7 +96,14 @@ pub extern "C" fn block_device(transport_ptr: *mut u8)
     let transport = *transport_box;
     
     let blk = VirtIOBlk::<HalImpl, MmioTransport>::new(transport).expect("failed to create blk driver");
-    let blk_device = Arc::new(VirtioBlkDriver::new(blk));
-    push_device(blk_device);
+    // Create the concrete VirtioBlkDriver instance wrapped in Arc
+    let concrete_virtio_blk_driver = Arc::new(VirtioBlkDriver::new(blk));
+    
+    // Explicitly upcast to the trait object Arc<dyn Driver>
+    // This clarifies the type conversion to the `Driver` trait object.
+    let driver_object: Arc<dyn Driver> = concrete_virtio_blk_driver;
+    
+    // Push the trait object to the device set
+    push_device(driver_object);
     info!("Registered virtio block device");
 }
