@@ -63,11 +63,11 @@ unsafe impl Hal for HalImpl {
 
     unsafe fn share(buffer: NonNull<[u8]>, _direction: BufferDirection) -> PhysAddr {
         let raw_ptr = buffer.as_ptr() as *mut u8 as usize;
-        trace!(
-            "share: raw_ptr: {:#x}, phys: {:#x}",
-            raw_ptr,
-            raw_ptr & !VIRT_ADDR_START
-        );
+        // trace!(
+        //     "share: raw_ptr: {:#x}, phys: {:#x}",
+        //     raw_ptr,
+        //     raw_ptr & !VIRT_ADDR_START
+        // );
 
         PhysAddr::from(raw_ptr & !VIRT_ADDR_START)
     }

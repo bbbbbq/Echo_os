@@ -5,6 +5,9 @@ use core::panic::PanicInfo;
 use core::ptr::NonNull;
 use device::init_dt;
 use filesystem::init_fs;
+use filesystem::file::File;
+use filesystem::path::Path;
+use filesystem::vfs::OpenFlags;
 use flat_device_tree;
 use flat_device_tree::{node::FdtNode, standard_nodes::Compatible, Fdt};
 use heap;
@@ -23,6 +26,7 @@ use virtio_drivers::{
 };
 extern crate alloc;
 use alloc::vec;
+use crate::alloc::string::ToString;
 use boot;
 use device::device_set;
 use frame;
@@ -50,18 +54,39 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     heap::init();
 
     init_dt(dtb);
+    init_fs();
+    test_file(); // Call the test function
 
-
-    let blk_dev = get_block_device(0)
-        .expect("Failed to get device 0 as a block driver, or it's not a block device.");
-    
-    let mut buf = [0u8; 512];
-    info!("Attempting to read from block device 0");
-    blk_dev.read(0, &mut buf)
-        .expect("Failed to read from block device 0.");
-
-
-    info!("Successfully read from block device. Buffer starts with: {:x?}", &buf[0..8]);
     info!("kernel_end");
     loop {}
+}
+
+pub fn test_file() {
+    info!("Attempting to open /hello.txt");
+    let path = Path::new("/hello.txt".to_string());
+    let flags = OpenFlags::O_RDONLY;
+
+    match File::open(path, flags) {
+        Ok(_file) => {
+            info!("Successfully opened /hello.txt");
+            let mut buffer = [0u8; 64]; // Buffer to read file content
+            match _file.read_at(&mut buffer) {
+                Ok(bytes_read) => {
+                    if bytes_read > 0 {
+                        // Attempt to convert the read bytes to a UTF-8 string
+                        match core::str::from_utf8(&buffer[..bytes_read]) {
+                            Ok(s) => info!("Content of /hello.txt: \"{}\"", s.trim_end_matches('\0')),
+                            Err(_) => error!("Content of /hello.txt is not valid UTF-8"),
+                        }
+                    } else {
+                        info!("/hello.txt is empty or read 0 bytes.");
+                    }
+                }
+                Err(e) => error!("Failed to read /hello.txt: {:?}", e),
+            }
+        }
+        Err(e) => {
+            error!("Failed to open /hello.txt: {:?}", e);
+        }
+    }
 }

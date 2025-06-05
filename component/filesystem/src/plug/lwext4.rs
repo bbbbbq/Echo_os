@@ -12,7 +12,7 @@ use lwext4_rust::{Ext4BlockWrapper, Ext4File, InodeTypes, KernelDevOp};
 use alloc::sync::Arc;
 use alloc::ffi::CString;
 use log::{debug, error, info, warn};
-use crate::vfs::{Inode, VfsError, FileType, DirEntry, OpenFlags, VfsResult, FileSystem, FS_type};
+use crate::vfs::{Inode, VfsError, FileType, DirEntry, OpenFlags, VfsResult, FileSystem, FsType};
 use spin::Mutex;
 use alloc::{string::String, vec::Vec};
 use alloc::string::ToString;
@@ -232,8 +232,8 @@ impl FileSystem for Ext4FileSystemWrapper {
         Some(self.root.clone())
     }
     
-    fn get_type(&self) -> FS_type {
-        FS_type::EXT4
+    fn get_type(&self) -> FsType {
+        FsType::Ext4fs
     }
 }
 

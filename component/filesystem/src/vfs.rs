@@ -141,12 +141,13 @@ pub trait Inode: DowncastSync + Send + Sync {
 
 impl_downcast!(Inode);
 
-pub enum FS_type {
-    EXT4,
-    FAT32,
+pub enum FsType {
+    Ext4fs,
+    Tmpfs,
+    DevFs,
 }
 
 pub trait FileSystem: Send + Sync {
     fn root_inode(&self) -> Option<Arc<dyn Inode>>;
-    fn get_type(&self) -> FS_type;
+    fn get_type(&self) -> FsType;
 }

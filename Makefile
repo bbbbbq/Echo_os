@@ -83,12 +83,13 @@ clean:
 	cargo clean
 	-rm -f $(KERNEL_BIN)
 
-# 创建空的文件系统镜像
+# 创建并填充文件系统镜像
 .PHONY: fs-img
 fs-img:
-	@echo "=== 创建文件系统镜像 ==="
-	dd if=/dev/zero of=fs.img bs=1M count=32
-	mkfs.ext4 fs.img
+	@echo "=== 创建并填充文件系统镜像 ==="
+	@echo "This will require sudo privileges."
+	sudo ./populate_fs_image.sh
+	sudo chown $(USER):$(USER) fs.img
 
 # 杀死 tmux 会话
 .PHONY: tmux_kill

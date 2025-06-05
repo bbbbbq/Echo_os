@@ -11,6 +11,7 @@ pub struct FdTable {
 
 impl FdTable {
     pub fn new() -> Self {
+        
         Self {
             table: Mutex::new(Vec::new())
         }

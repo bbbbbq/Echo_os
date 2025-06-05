@@ -57,10 +57,34 @@ pub fn umount_fs(path: Path) -> bool {
 
 pub fn get_mount_node(path: Path) -> Option<MountNode> {
     let mount_list = MOUNT_LIST.lock();
-    for (mount_path, mount_node) in mount_list.iter() {
-        if path == *mount_path || path.get_inner().starts_with(&mount_path.get_inner()) {
-            return Some(mount_node.clone());
+    let mut best_match_node: Option<MountNode> = None;
+    let mut max_prefix_len: usize = 0;
+
+    let input_path_str = path.to_string();
+
+    for (mount_point, mount_node) in mount_list.iter() {
+        let mount_point_str = mount_point.to_string();
+
+        if input_path_str.starts_with(&mount_point_str) {
+            let current_prefix_len = mount_point_str.len();
+
+            let is_exact_match = input_path_str.len() == current_prefix_len;
+            let is_prefix_and_subdir = if !is_exact_match {
+                input_path_str.as_bytes().get(current_prefix_len).map_or(false, |&c| c == b'/')
+            } else {
+                false 
+            };
+            let valid_match_as_prefix = if mount_point_str == "/" {
+                true
+            } else {
+                is_exact_match || is_prefix_and_subdir
+            };
+
+            if valid_match_as_prefix && current_prefix_len > max_prefix_len {
+                max_prefix_len = current_prefix_len;
+                best_match_node = Some(mount_node.clone());
+            }
         }
     }
-    None
+    best_match_node
 }

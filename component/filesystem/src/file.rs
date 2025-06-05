@@ -1,85 +1,116 @@
-use super::vfs::{OpenFlags,Inode};
+use crate::vfs::{Inode, OpenFlags};
+use crate::path::Path;
 use alloc::sync::Arc;
 use crate::vfs::VfsResult;
 use crate::vfs::DirEntry;
 use alloc::vec::Vec;
+use crate::mount::get_mount_node;
+
 
 pub struct File {
     pub inner: Arc<dyn Inode>,
-    pub openflages: OpenFlags,
+    pub openflags: OpenFlags,
     pub offset: usize,
 }
 
 impl File {
-    pub fn new(inner: Arc<dyn Inode>, openflages: OpenFlags) -> Self {
-        Self { inner, openflages, offset: 0 }
+    pub fn open(path: Path, flags: OpenFlags) -> VfsResult<Self> {
+        let mount_node = match get_mount_node(path.clone()) {
+            Some(node) => node,
+            None => return Err(crate::vfs::VfsError::NotFound),
+        };
+        
+        let root_inode = mount_node.get_inode();
+        
+        // Split the path into components and navigate through directories
+        let path_str = path.to_string();
+        let components: Vec<&str> = path_str.split('/').filter(|s| !s.is_empty()).collect();
+        
+        let mut current_inode = root_inode;
+        
+        for component in components {
+            match current_inode.lookup(component) {
+                Ok(inode) => current_inode = inode,
+                Err(e) => return Err(e),
+            }
+        }
+        
+        Ok(Self {
+            inner: current_inode,
+            openflags: flags,
+            offset: 0
+        })
+    }
+
+    pub fn new(inner: Arc<dyn Inode>, openflags: OpenFlags) -> Self {
+        Self { inner, openflags, offset: 0 }
     }
 
     pub fn read_at(&self, buf: &mut [u8]) -> VfsResult<usize> {
-        if !self.openflages.contains(OpenFlags::O_RDONLY) && !self.openflages.contains(OpenFlags::O_RDWR) {
+        if !self.openflags.contains(OpenFlags::O_RDONLY) && !self.openflags.contains(OpenFlags::O_RDWR) {
             return Err(crate::vfs::VfsError::PermissionDenied);
         }
         self.inner.read_at(self.offset, buf)
     }
 
     pub fn write_at(&self, buf: &[u8]) -> VfsResult<usize> {
-        if !self.openflages.contains(OpenFlags::O_WRONLY) && !self.openflages.contains(OpenFlags::O_RDWR) {
+        if !self.openflags.contains(OpenFlags::O_WRONLY) && !self.openflags.contains(OpenFlags::O_RDWR) {
             return Err(crate::vfs::VfsError::PermissionDenied);
         }
         self.inner.write_at(self.offset, buf)
     }
 
     pub fn mkdir_at(&self, name: &str) -> VfsResult<()> {
-        if !self.openflages.contains(OpenFlags::O_WRONLY) && !self.openflages.contains(OpenFlags::O_RDWR) {
+        if !self.openflags.contains(OpenFlags::O_WRONLY) && !self.openflags.contains(OpenFlags::O_RDWR) {
             return Err(crate::vfs::VfsError::PermissionDenied);
         }
         self.inner.mkdir_at(name)
     }
 
     pub fn rm_dir(&self, name: &str) -> VfsResult<()> {
-        if !self.openflages.contains(OpenFlags::O_WRONLY) && !self.openflages.contains(OpenFlags::O_RDWR) {
+        if !self.openflags.contains(OpenFlags::O_WRONLY) && !self.openflags.contains(OpenFlags::O_RDWR) {
             return Err(crate::vfs::VfsError::PermissionDenied);
         }
         self.inner.rm_dir(name)
     }
 
     pub fn rm_file(&self, name: &str) -> VfsResult<()> {
-        if !self.openflages.contains(OpenFlags::O_WRONLY) && !self.openflages.contains(OpenFlags::O_RDWR) {
+        if !self.openflags.contains(OpenFlags::O_WRONLY) && !self.openflags.contains(OpenFlags::O_RDWR) {
             return Err(crate::vfs::VfsError::PermissionDenied);
         }
         self.inner.rm_file(name)
     }
 
     pub fn lookup(&self, name: &str) -> VfsResult<Arc<dyn Inode>> {
-        if !self.openflages.contains(OpenFlags::O_RDONLY) && !self.openflages.contains(OpenFlags::O_RDWR) {
+        if !self.openflags.contains(OpenFlags::O_RDONLY) && !self.openflags.contains(OpenFlags::O_RDWR) {
             return Err(crate::vfs::VfsError::PermissionDenied);
         }
         self.inner.lookup(name)
     }
 
     pub fn read_dir(&self) -> VfsResult<Vec<DirEntry>> {
-        if !self.openflages.contains(OpenFlags::O_RDONLY) && !self.openflages.contains(OpenFlags::O_RDWR) {
+        if !self.openflags.contains(OpenFlags::O_RDONLY) && !self.openflags.contains(OpenFlags::O_RDWR) {
             return Err(crate::vfs::VfsError::PermissionDenied);
         }
         self.inner.read_dir()
     }
 
     pub fn create_file(&self, name: &str) -> VfsResult<()> {
-        if !self.openflages.contains(OpenFlags::O_WRONLY) && !self.openflages.contains(OpenFlags::O_RDWR) {
+        if !self.openflags.contains(OpenFlags::O_WRONLY) && !self.openflags.contains(OpenFlags::O_RDWR) {
             return Err(crate::vfs::VfsError::PermissionDenied);
         }
         self.inner.create_file(name)
     }
 
     pub fn truncate(&self, size: usize) -> VfsResult<()> {
-        if !self.openflages.contains(OpenFlags::O_WRONLY) && !self.openflages.contains(OpenFlags::O_RDWR) {
+        if !self.openflags.contains(OpenFlags::O_WRONLY) && !self.openflags.contains(OpenFlags::O_RDWR) {
             return Err(crate::vfs::VfsError::PermissionDenied);
         }
         self.inner.truncate(size)
     }
 
     pub fn flush(&self) -> VfsResult<()> {
-        if !self.openflages.contains(OpenFlags::O_WRONLY) && !self.openflages.contains(OpenFlags::O_RDWR) {
+        if !self.openflags.contains(OpenFlags::O_WRONLY) && !self.openflags.contains(OpenFlags::O_RDWR) {
             return Err(crate::vfs::VfsError::PermissionDenied);
         }
         self.inner.flush()

@@ -2,40 +2,52 @@
 
 extern crate alloc;
 
-pub mod vfs;
+pub mod devfs;
+pub mod fd_table;
 pub mod file;
+pub mod io;
+pub mod mount;
 pub mod path;
 pub mod plug;
-pub mod mount;
-pub mod fd_table;
-pub mod io;
-pub mod devfs;
+pub mod vfs;
 
-use alloc::sync::Arc;
-use alloc::string::ToString;
-use crate::plug::lwext4::Ext4FileSystemWrapper;
+use crate::devfs::DevFs;
 use crate::mount::mount_fs;
 use crate::path::Path;
+use crate::plug::lwext4::Ext4FileSystemWrapper;
+use crate::vfs::{FileSystem, VfsError};
+use alloc::string::{String, ToString};
+use alloc::sync::Arc;
+use lazy_static::lazy_static;
+use spin::Mutex;
+lazy_static! {
+    pub static ref ROOT_FS: Mutex<Option<Arc<Ext4FileSystemWrapper>>> = Mutex::new(None);
+}
 
-pub fn init_fs()
-{
+pub fn init_fs() {
     log::info!("Starting filesystem initialization");
-    
-    // Check if block device 0 is available
-    log::debug!("Attempting to create Ext4FileSystemWrapper for device 0");
+    mount_ext4();
+    mount_devfs();
+}
+
+pub fn mount_ext4() {
     match crate::plug::lwext4::Ext4FileSystemWrapper::new(0) {
         Ok(ext4_fs) => {
-            log::info!("Ext4FileSystemWrapper created successfully");
+            *ROOT_FS.lock() = Some(Arc::clone(&ext4_fs));
             let mount_path = Path::new("/".to_string());
-            log::debug!("Mounting at path: /{:?}", mount_path);
             mount_fs(ext4_fs, mount_path);
-            log::info!("Filesystem mount operation completed successfully");
-        },
+            log::info!("Filesystem mounted successfully and ROOT_FS initialized");
+        }
         Err(e) => {
             log::warn!("Failed to initialize filesystem: error code={}", e);
         }
     }
-    log::info!("Filesystem initialization complete");
 }
 
-
+pub fn mount_devfs() {
+    log::info!("Attempting to mount DevFs at /dev...");
+    let dev_filesystem = Arc::new(DevFs::new());
+    let mount_path = Path::new("/dev".to_string());
+    mount_fs(dev_filesystem, mount_path);
+    log::info!("dev init success");
+}

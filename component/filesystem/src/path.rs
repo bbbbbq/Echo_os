@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
-#[derive(Debug,PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Path
 {
     inner:Vec<String>
@@ -30,6 +30,15 @@ impl Path
         } else {
             self.inner.last().unwrap().clone()
         }
+    }
+
+    pub fn to_string(&self) -> String {
+        if self.inner.is_empty() {
+            return "/".to_string();
+        }
+        let mut s = String::from("/");
+        s.push_str(&self.inner.join("/"));
+        s
     }
 }
 
