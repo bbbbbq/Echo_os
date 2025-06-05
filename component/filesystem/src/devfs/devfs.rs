@@ -1,11 +1,7 @@
-use alloc::string::String; // Import String
-use alloc::sync::Arc;
+use alloc::string::String; use alloc::sync::Arc;
 use alloc::vec::Vec;
-use alloc::vec; // Import the vec! macro
-use crate::vfs::{DirEntry, FileSystem, FsType, Inode, VfsResult, FileType, VfsError};
-use crate::path::Path; // For Inode::mount method signature
-use spin::Mutex; // Import Mutex
-use lazy_static::lazy_static;
+use alloc::vec; use crate::vfs::{DirEntry, FileSystem, FsType, Inode, VfsResult, FileType, VfsError, FileAttr};
+use crate::path::Path; use spin::Mutex; use lazy_static::lazy_static;
 use super::null::NullDev;
 use super::zero::ZeroDev;
 use super::uart::UartDev;
@@ -22,8 +18,7 @@ impl DevFs {
 }
 
 #[derive(Debug)]
-pub struct DevFsDirInode; // Represents the /dev directory
-
+pub struct DevFsDirInode; 
 impl DevFsDirInode {
     pub fn new() -> Self {
         DevFsDirInode
@@ -32,12 +27,10 @@ impl DevFsDirInode {
 
 impl Inode for DevFsDirInode {
     fn read_dir(&self) -> VfsResult<Vec<DirEntry>> {
-        // TODO: List actual devices. For now, return a fixed list or empty.
-        Ok(vec![
+                Ok(vec![
             DirEntry {
                 filename: String::from("null"),
-                len: 0, // Device files often have 0 size in directory listings
-                file_type: FileType::CharDevice,
+                len: 0,                 file_type: FileType::CharDevice,
             },
             DirEntry {
                 filename: String::from("zero"),
@@ -87,6 +80,12 @@ impl Inode for DevFsDirInode {
 
     fn truncate(&self, _size: usize) -> VfsResult<()> {
         Err(VfsError::NotSupported)
+    }
+
+    fn getattr(&self) -> VfsResult<FileAttr> {
+        Ok(FileAttr {
+            size: 0,             file_type: FileType::Directory,
+        })
     }
 }
 

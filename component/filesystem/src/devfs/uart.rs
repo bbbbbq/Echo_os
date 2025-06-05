@@ -1,4 +1,4 @@
-use crate::vfs::{FileType, VfsError, Inode, DirEntry, FileSystem};
+use crate::vfs::{FileType, VfsError, Inode, DirEntry, FileSystem, FileAttr};
 use crate::path::Path;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -80,6 +80,11 @@ impl Inode for UartDev {
     fn umount(&self) -> VfsResult<()> {
         Err(VfsError::NotSupported) // UART is not a mount point
     }
+
+    fn getattr(&self) -> VfsResult<FileAttr> {
+        Ok(FileAttr {
+            size: 0, // UART device size is typically 0
+            file_type: self.file_type,
+        })
+    }
 }
-
-

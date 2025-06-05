@@ -146,4 +146,11 @@ impl File {
         }
         self.inner.flush()
     }
+
+    pub fn get_file_size(&self) -> VfsResult<usize> {
+        // Assuming self.inner (Inode) has a getattr() method returning VfsResult<FileAttr>
+        // and FileAttr has a 'size' field.
+        let attr = self.inner.getattr()?;
+        Ok(attr.size)
+    }
 }

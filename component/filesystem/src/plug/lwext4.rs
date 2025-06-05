@@ -1,5 +1,5 @@
 use lwext4_rust;
-use lwext4_rust::bindings::{O_WRONLY, O_CREAT, O_TRUNC, O_RDWR, SEEK_SET};
+use lwext4_rust::bindings::{O_WRONLY, O_CREAT, O_TRUNC, O_RDWR, SEEK_SET, ext4_raw_inode_fill, ext4_inode};
 
 use device::device_set::get_device;
 use device::{DeviceType as EchoDeviceType, BlockDriver}; // Removed Driver, define module removed
@@ -12,7 +12,7 @@ use lwext4_rust::{Ext4BlockWrapper, Ext4File, InodeTypes, KernelDevOp};
 use alloc::sync::Arc;
 use alloc::ffi::CString;
 use log::{debug, error, info, warn};
-use crate::vfs::{Inode, VfsError, FileType, DirEntry, OpenFlags, VfsResult, FileSystem, FsType};
+use crate::vfs::{Inode, VfsError, FileType, DirEntry, OpenFlags, VfsResult, FileSystem, FsType, FileAttr};
 use spin::Mutex;
 use alloc::{string::String, vec::Vec};
 use alloc::string::ToString;
@@ -77,7 +77,7 @@ impl Ext4DiskWrapper {
         // info!("block id: {}", self.block_id);
         let read_size = if self.offset == 0 && buf.len() >= BLOCK_SIZE {
             // whole block
-            let dev = match try_get_block_driver(self.dev_id) { Ok(d) => d, Err(e) => { error!("Ext4DevOp failed to get block device {}: {}. Returning EIO.", self.dev_id, e); return Err(-5); /* EIO */ } };
+            let dev = match try_get_block_driver(self.dev_id) { Ok(d) => d, Err(e) => { error!("Ext4DevOp failed to get block device {}: {}. Returning EIO.", self.dev_id, e); return Err(-5);  } };
             dev.read(self.block_id, &mut buf[0..BLOCK_SIZE]);
             self.block_id += 1;
             BLOCK_SIZE
@@ -90,7 +90,7 @@ impl Ext4DiskWrapper {
                 info!("block size: {} start {}", BLOCK_SIZE, start);
             }
 
-            let dev = match try_get_block_driver(self.dev_id) { Ok(d) => d, Err(e) => { error!("Ext4DevOp failed to get block device {}: {}. Returning EIO.", self.dev_id, e); return Err(-5); /* EIO */ } };
+            let dev = match try_get_block_driver(self.dev_id) { Ok(d) => d, Err(e) => { error!("Ext4DevOp failed to get block device {}: {}. Returning EIO.", self.dev_id, e); return Err(-5);  } };
             dev.read(self.block_id, &mut data);
             buf[..count].copy_from_slice(&data[start..start + count]);
 
@@ -107,7 +107,7 @@ impl Ext4DiskWrapper {
     pub fn write_one(&mut self, buf: &[u8]) -> Result<usize, i32> {
         let write_size = if self.offset == 0 && buf.len() >= BLOCK_SIZE {
             // whole block
-            let dev = match try_get_block_driver(self.dev_id) { Ok(d) => d, Err(e) => { error!("Ext4DevOp failed to get block device {}: {}. Returning EIO.", self.dev_id, e); return Err(-5); /* EIO */ } };
+            let dev = match try_get_block_driver(self.dev_id) { Ok(d) => d, Err(e) => { error!("Ext4DevOp failed to get block device {}: {}. Returning EIO.", self.dev_id, e); return Err(-5);  } };
             dev.write(self.block_id, &buf[0..BLOCK_SIZE]);
             self.block_id += 1;
             BLOCK_SIZE
@@ -117,10 +117,10 @@ impl Ext4DiskWrapper {
             let start = self.offset;
             let count = buf.len().min(BLOCK_SIZE - self.offset);
 
-            let dev = match try_get_block_driver(self.dev_id) { Ok(d) => d, Err(e) => { error!("Ext4DevOp failed to get block device {}: {}. Returning EIO.", self.dev_id, e); return Err(-5); /* EIO */ } };
+            let dev = match try_get_block_driver(self.dev_id) { Ok(d) => d, Err(e) => { error!("Ext4DevOp failed to get block device {}: {}. Returning EIO.", self.dev_id, e); return Err(-5);  } };
             dev.read(self.block_id, &mut data);
             data[start..start + count].copy_from_slice(&buf[..count]);
-            let dev = match try_get_block_driver(self.dev_id) { Ok(d) => d, Err(e) => { error!("Ext4DevOp failed to get block device {}: {}. Returning EIO.", self.dev_id, e); return Err(-5); /* EIO */ } };
+            let dev = match try_get_block_driver(self.dev_id) { Ok(d) => d, Err(e) => { error!("Ext4DevOp failed to get block device {}: {}. Returning EIO.", self.dev_id, e); return Err(-5);  } };
             dev.write(self.block_id, &data);
 
             self.offset += count;
@@ -280,7 +280,6 @@ impl Ext4FileWrapper {
         }
 
         if let Some(rest) = p.strip_prefix("./") {
-            //if starts with "./"
             return self.path_deal_with(rest);
         }
         let rest_p = p.replace("//", "/");
@@ -288,8 +287,6 @@ impl Ext4FileWrapper {
             return self.path_deal_with(&rest_p);
         }
 
-        //Todo ? ../
-        //注：lwext4创建文件必须提供文件path的绝对路径
         let file = self.inner.lock();
         let path = file.get_path();
         let fpath = String::from(path.to_str().unwrap().trim_end_matches('/')) + "/" + p;
@@ -491,6 +488,29 @@ impl Inode for Ext4FileWrapper {
     fn flush(&self) -> VfsResult<()> {
         // Nothing to do for now, just return success
         Ok(())
+    }
+
+    fn getattr(&self) -> VfsResult<FileAttr> {
+        let file_guard = self.inner.lock();
+        let path_cstr = file_guard.get_path();
+
+        let mut inode_info: ext4_inode = unsafe { core::mem::zeroed() };
+        let mut inode_num: u32 = 0;
+        let ret = unsafe {
+            ext4_raw_inode_fill(path_cstr.as_ptr(), &mut inode_num, &mut inode_info)
+        };
+
+        if ret == 0 {
+            let size_val = (inode_info.size_hi as u64) << 32 | (inode_info.size_lo as u64);
+            
+            Ok(FileAttr {
+                size: size_val as usize,
+                file_type: self.file_type,
+            })
+        } else {
+            error!("ext4_raw_inode_fill failed for path: {:?}, ret: {}", path_cstr, ret);
+            Err(VfsError::IoError) // Or map 'ret' to a more specific VfsError
+        }
     }
 
     fn rename(&self, new_name: &str) -> VfsResult<()> {

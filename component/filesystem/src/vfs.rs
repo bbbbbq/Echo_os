@@ -21,6 +21,7 @@ pub enum FileType {
 
 #[derive(Debug)]
 pub enum VfsError {
+    InvalidPath,
     NotFound,
     AlreadyExists,
     InvalidArgument,
@@ -91,6 +92,12 @@ impl OpenFlags {
 
 pub type VfsResult<T> = Result<T, VfsError>;
 
+pub struct FileAttr {
+    pub size: usize,
+    pub file_type: FileType,
+    // We can add more fields like permissions, timestamps, etc. later
+}
+
 pub struct DirEntry {
     pub filename: String,
     pub len: usize,
@@ -137,6 +144,10 @@ pub trait Inode: DowncastSync + Send + Sync {
     fn umount(&self) -> VfsResult<()> {
         unimplemented!()
     }
+    fn getattr(&self) -> VfsResult<FileAttr> {
+        Err(VfsError::NotSupported)
+    }
+
     fn get_type(&self) -> VfsResult<FileType> {
         Err(VfsError::NotSupported)
     }

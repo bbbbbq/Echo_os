@@ -1,4 +1,4 @@
-use crate::vfs::{FileType, VfsError, Inode, DirEntry, FileSystem, VfsResult};
+use crate::vfs::{FileType, VfsError, Inode, DirEntry, FileSystem, VfsResult, FileAttr};
 use crate::path::Path; // Alias if Path is ambiguous with vfs::Path
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -69,5 +69,12 @@ impl Inode for ZeroDev {
 
     fn umount(&self) -> VfsResult<()> {
         Err(VfsError::NotSupported)
+    }
+
+    fn getattr(&self) -> VfsResult<FileAttr> {
+        Ok(FileAttr {
+            size: 0, // /dev/zero is infinite, but getattr usually shows 0 for devices
+            file_type: FileType::CharDevice,
+        })
     }
 }
