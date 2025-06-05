@@ -14,3 +14,4 @@ virtio-drivers  = { workspace = true }
 frame = { workspace = true }
 device = { workspace = true }
 filesystem = { workspace = true }
+arch = { workspace = true }

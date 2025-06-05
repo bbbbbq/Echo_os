@@ -60,6 +60,7 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     test_file(); // Call the test function
     
     info!("kernel_end");
+    arch::os_shut_down();
     loop {}
 }
 
