@@ -55,9 +55,9 @@ pub fn umount_fs(path: Path) -> bool {
     }
 }
 
-pub fn get_mount_node(path: Path) -> Option<MountNode> {
+pub fn get_mount_node(path: Path) -> Option<(Path, MountNode)> {
     let mount_list = MOUNT_LIST.lock();
-    let mut best_match_node: Option<MountNode> = None;
+    let mut best_match_data: Option<(Path, MountNode)> = None;
     let mut max_prefix_len: usize = 0;
 
     let input_path_str = path.to_string();
@@ -82,9 +82,9 @@ pub fn get_mount_node(path: Path) -> Option<MountNode> {
 
             if valid_match_as_prefix && current_prefix_len > max_prefix_len {
                 max_prefix_len = current_prefix_len;
-                best_match_node = Some(mount_node.clone());
+                best_match_data = Some((mount_point.clone(), mount_node.clone()));
             }
         }
     }
-    best_match_node
+    best_match_data
 }

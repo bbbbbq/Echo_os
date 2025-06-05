@@ -5,7 +5,6 @@ extern crate alloc;
 pub mod devfs;
 pub mod fd_table;
 pub mod file;
-pub mod io;
 pub mod mount;
 pub mod path;
 pub mod plug;

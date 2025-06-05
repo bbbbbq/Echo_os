@@ -137,6 +137,9 @@ pub trait Inode: DowncastSync + Send + Sync {
     fn umount(&self) -> VfsResult<()> {
         unimplemented!()
     }
+    fn get_type(&self) -> VfsResult<FileType> {
+        Err(VfsError::NotSupported)
+    }
 }
 
 impl_downcast!(Inode);

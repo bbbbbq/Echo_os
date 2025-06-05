@@ -338,6 +338,10 @@ impl Ext4FileWrapper {
 }
 
 impl Inode for Ext4FileWrapper {
+    fn get_type(&self) -> VfsResult<FileType> {
+        Ok(self.file_type)
+    }
+
     fn read_at(&self, offset: usize, buf: &mut [u8]) -> VfsResult<usize> {
         debug!("To read_at {}, buf len={}", offset, buf.len());
         let mut file = self.inner.lock();
