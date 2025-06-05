@@ -3,10 +3,16 @@
 use console::println;
 use core::panic::PanicInfo;
 use core::ptr::NonNull;
+use device::define::BlockDriver;
 use device::init_dt;
+use filesystem::init_fs;
 use flat_device_tree;
 use flat_device_tree::{node::FdtNode, standard_nodes::Compatible, Fdt};
 use heap;
+use device::device_set::get_device;
+use virtio::blk::VirtioBlkDriver;
+use device::define::Driver;
+use device::define::DeviceType as EchoDeviceType; // Alias for clarity
 use log::{debug, error, info, warn};
 use virtio::halimpl::HalImpl;
 use virtio_drivers::{
@@ -21,6 +27,7 @@ use alloc::vec;
 use boot;
 use device::device_set;
 use frame;
+use alloc::sync::Arc;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -44,46 +51,28 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     heap::init();
 
     init_dt(dtb);
-    
-    let blk_device = device_set::get_device(0);
-    if let Some(ref device) = blk_device {
-        let device_type = device.get_type();
-        let type_str = match device_type {
-            device::define::DeviceType::Block => "Block",
-            device::define::DeviceType::Network => "Network",
-            device::define::DeviceType::Console => "Console",
-            device::define::DeviceType::Unknown => "Unknown",
-        };
-        info!("device_type: {}", type_str);
-    } else {
-        info!("No device found at index 0");
-    }
 
-    if let Some(block_device) = blk_device {
-        let device_type = block_device.get_type();
-        info!("Detected device of type: {:?}", match device_type {
-            device::define::DeviceType::Block => "Block",
-            device::define::DeviceType::Network => "Network",
-            device::define::DeviceType::Console => "Console",
-            _ => "Unknown",
-        });
-        
-        if let Some(block_driver) = block_device.as_block_driver() {
-            let mut buffer = [0u8; 512];
-            match block_driver.read(2, &mut buffer) {
-                Ok(_) => {
-                    info!("Block device read test successful");
-                    info!("First bytes: {:?}", &buffer[..512]);
+    let device_option = get_device(0);
+    if let Some(device_arc) = device_option {
+        if device_arc.get_type() == EchoDeviceType::Block {
+            match device_arc.downcast_arc::<VirtioBlkDriver<MmioTransport>>() {
+                Ok(blk_driver_concrete) => {
+                    let dev: Arc<dyn BlockDriver> = blk_driver_concrete;
+                    let mut buf = [0u8; 512];
+                    info!("Attempting to read from block device 0");
+                    dev.read(0, &mut buf);
+                    info!("Successfully read from block device. Buffer starts with: {:x?}", &buf[0..8]);
                 }
-                Err(e) => {
-                    error!("Block device read failed: {}", e);
+                Err(_) => {
+                    error!("Failed to downcast device 0 to VirtioBlkDriver");
                 }
             }
         } else {
-            warn!("Device does not implement BlockDriver trait");
+            error!("Device 0 is not a block device. Type: {:?}", device_arc.get_type());
         }
+    } else {
+        error!("Failed to get device 0");
     }
-
     info!("kernel_end");
     loop {}
 }

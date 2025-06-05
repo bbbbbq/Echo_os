@@ -2,8 +2,9 @@ use std::{env, io::Result};
 
 const loglevel:&str = "error";
 
-
 fn main() -> Result<()> {
+    // let board = env::var("BOARD").unwrap_or_else(|_| "virt".to_string());
+    // println!("cargo:rustc-env=BOARD={}", board);
     gen_linker_script()
 }
 

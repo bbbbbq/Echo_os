@@ -39,10 +39,6 @@ where
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
-    fn as_block_driver(&self) -> Option<&dyn BlockDriver> {
-        Some(self)
-    }
 }
 
 impl<T> BlockDriver for VirtioBlkDriver<T>
@@ -61,6 +57,11 @@ where
             Ok(_) => Ok(()),
             Err(_) => Err("Failed to write to block device")
         }
+    }
+
+    fn capacity(&self)->u64
+    {
+        self.inner.lock().capacity()
     }
 }
 

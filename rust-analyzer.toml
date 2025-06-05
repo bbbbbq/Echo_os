@@ -1,0 +1,15 @@
+[target.'cfg(target_arch = "riscv64")']
+rustflags = ["-C", "target-feature=+crt-static"]
+
+# Enable proc_macro for rust-analyzer
+[unstable]
+proc_macro = true
+
+# Set the correct target
+[build]
+target = "riscv64gc-unknown-none-elf"
+
+# Extra rustc flags for analysis
+[check]
+command = "clippy"
+extra-args = ["--target", "riscv64gc-unknown-none-elf"]

@@ -70,10 +70,10 @@ macro_rules! print {
         let _ = write!(writer, $($arg)*);
     })
 }
+
 pub fn init() {
     static LOGGER: NoStdLogger = NoStdLogger;
     
-    // Directly set the log level to Error as requested in kernel/build.rs
     let log_level = LevelFilter::Trace;
     
     set_logger(&LOGGER).unwrap();

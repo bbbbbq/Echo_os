@@ -3,7 +3,7 @@ use riscv::register::satp;
 use config::target::plat::VIRT_ADDR_START;
 // Define PTE flags as a simple bitflags enum
 use bitflags::bitflags;
-
+use console::println;
 // Helper function to create page table entries
 fn create_pte(addr: usize, flags: u64) -> u64 {
     ((addr >> 12) << 10) as u64 | flags
@@ -98,6 +98,12 @@ global_asm!(
 );
 
 pub fn rust_entry(hartid: usize, dtb: usize) {
+    if dtb != 0xbfe00000
+    {
+        println!("dtb : {:x}",dtb);
+        loop{}
+    }
+    
     unsafe {
         kernel_main(hartid, dtb);
     }
