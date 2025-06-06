@@ -1,7 +1,7 @@
 [workspace]
 members = [ "component/UintAllocator", "component/bitmap", "component/boot", "component/config", 
     "component/console", "component/driver/device", "component/driver/virtio", "component/driver/api", "component/filesystem", "component/frame", 
-    "component/heap", "kernel", "component/arch"]
+    "component/heap", "kernel", "component/arch", "component/mem"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -25,3 +25,4 @@ UintAllocator = { path = "component/UintAllocator"}
 downcast-rs = { version = "2.0.1", default-features = false, features = ["sync"] }
 filesystem = { path = "component/filesystem"}
 arch ={ path = "component/arch" }
+cfg-if = "1.0.0"

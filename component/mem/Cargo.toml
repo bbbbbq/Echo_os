@@ -1,0 +1,12 @@
+[package]
+name = "mem"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+page_table_multiarch = { version = "0.5.3"}
+memory_addr = { workspace = true }
+log = { workspace = true }
+config = { workspace = true }
+cfg-if = { workspace = true }
+frame = { workspace = true }
