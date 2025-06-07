@@ -14,10 +14,9 @@ use crate::devfs::DevFs;
 use crate::mount::mount_fs;
 use crate::path::Path;
 use crate::plug::lwext4::Ext4FileSystemWrapper;
-use crate::vfs::{FileSystem, VfsError};
-use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use lazy_static::lazy_static;
+use crate::alloc::string::ToString;
 use spin::Mutex;
 lazy_static! {
     pub static ref ROOT_FS: Mutex<Option<Arc<Ext4FileSystemWrapper>>> = Mutex::new(None);

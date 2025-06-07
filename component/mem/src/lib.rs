@@ -4,7 +4,7 @@ extern crate alloc;
 
 pub mod memregion;
 pub mod memset;
-pub mod PagHal;
+pub mod pag_hal;
 
 // Define multi-architecture modules and pub use them.
 cfg_if::cfg_if! {

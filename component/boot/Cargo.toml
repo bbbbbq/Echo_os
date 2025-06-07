@@ -3,6 +3,10 @@ name = "boot"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+test = false
+bench = false
+
 [dependencies]
 config = { workspace = true }
 page_table_multiarch = { workspace = true }

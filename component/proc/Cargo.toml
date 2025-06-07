@@ -1,0 +1,11 @@
+[package]
+name = "proc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+uint_allocator = { workspace = true }
+lazy_static = { workspace = true }
+spin = { workspace = true }
+mem = { workspace = true }
+filesystem = { workspace = true }

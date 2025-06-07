@@ -3,6 +3,10 @@ name = "mem"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+test = false
+bench = false
+
 [dependencies]
 page_table_multiarch = { version = "0.5.3"}
 memory_addr = { workspace = true }

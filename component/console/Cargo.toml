@@ -3,6 +3,10 @@ name = "console"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+test = false
+bench = false
+
 [dependencies]
 log = { workspace = true }
 [target.'cfg(target_arch = "riscv64")'.dependencies]

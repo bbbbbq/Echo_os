@@ -3,6 +3,10 @@ name = "heap"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+test = false
+bench = false
+
 [dependencies]
 buddy_system_allocator = "0.9"
 config = { workspace = true }

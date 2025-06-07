@@ -3,6 +3,10 @@ name = "filesystem"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+test = false
+bench = false
+
 [dependencies]
 downcast-rs = { workspace = true }
 lwext4_rust = { git = "https://github.com/Azure-stars/lwext4_rust.git", default-features = false, rev = "2e56b0aa2680b210892a46375fefca2bdf6e2865" }

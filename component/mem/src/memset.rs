@@ -1,5 +1,5 @@
 use super::memregion::MemRegion;
-use super::PagHal::PagingHandlerImpl;
+use super::pag_hal::PagingHandlerImpl;
 use crate::OsPageTable;
 use alloc::vec::Vec;
 use frame::{alloc_frame, dealloc_frame, FrameTracer};

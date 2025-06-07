@@ -3,17 +3,19 @@ name = "virtio"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+test = false
+bench = false
+
 [dependencies]
 flat_device_tree = { workspace = true }
 frame = { workspace = true }
 virtio-drivers = { workspace = true }
 spin = { workspace = true }
-alloc = { package = "rustc-std-workspace-alloc", version = "1.0.0", optional = true }
-core = { package = "rustc-std-workspace-core", version = "1.0.0", optional = true }
 memory_addr = { workspace = true }
 config = { workspace = true }
 log = { workspace = true }
 driver-api = { path = "../api" }
 device_set = { path = "../device", package = "device" }
-UintAllocator = { workspace = true }
+uint_allocator = { workspace = true }
 lazy_static = { workspace = true }

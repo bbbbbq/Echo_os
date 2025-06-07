@@ -3,6 +3,7 @@ name = "kernel"
 version = "0.1.0"
 edition = "2024"
 
+
 [dependencies]
 boot = { workspace = true }
 console = { workspace = true }

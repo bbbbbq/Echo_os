@@ -1,7 +1,11 @@
 [package]
-name = "UintAllocator"
+name = "uint_allocator"
 version = "0.1.0"
 edition = "2024"
+
+[lib]
+test = false
+bench = false
 
 [dependencies]
 spin = { workspace = true }

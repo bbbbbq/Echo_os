@@ -9,7 +9,8 @@ use virtio_drivers::transport::Transport;
 use spin::Mutex;
 use alloc::sync::Arc;
 use crate::halimpl::HalImpl;
-use UintAllocator::create_uint_allocator;
+#[macro_use]
+use uint_allocator::create_uint_allocator;
 use device_set::DEVICE_SET; // Renamed in Cargo.toml for virtio crate
 use device_set::push_device; // Renamed in Cargo.toml for virtio crate
 use log::{info,trace};
