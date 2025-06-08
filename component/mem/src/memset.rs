@@ -5,8 +5,8 @@ use alloc::vec::Vec;
 use frame::{alloc_frame, dealloc_frame, FrameTracer};
 use log::trace;
 use memory_addr::PageIter4K; // Import for page iteration
-use memory_addr::{PhysAddr, VirtAddr}; // Assuming 'paging' feature enables Page
-use page_table_multiarch::{MappingFlags, PageSize, PageTable64, PagingError}; // Use PageTable64 trait
+use memory_addr::PhysAddr; // Assuming 'paging' feature enables Page
+use page_table_multiarch::{PageSize, PagingError}; // Use PageTable64 trait
 
 pub struct MemSet {
     regions: Vec<MemRegion>,
@@ -39,7 +39,7 @@ impl MemSet {
                         .expect("Failed to allocate frame for mapping")
                         .paddr;
                     trace!("Mapping vaddr: {:?} to paddr: {:?}", vaddr_page, paddr);
-                    self.pagetable
+                    let _ = self.pagetable
                         .map(vaddr_page, paddr, PageSize::Size4K, flags)?;
                 }
             }

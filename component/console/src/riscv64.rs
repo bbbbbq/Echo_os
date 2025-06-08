@@ -1,7 +1,9 @@
+#[allow(deprecated)]
 use sbi_rt::legacy::console_putchar;
 use core::fmt::Write;
 
 pub fn putch(char:u8) {
+    #[allow(deprecated)]
     console_putchar(char as usize);
 }
 

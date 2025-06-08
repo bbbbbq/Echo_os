@@ -1,5 +1,4 @@
-use page_table_multiarch::{MappingFlags, PagingHandler, PageSize};
-use frame::{alloc_frame,dealloc_frame};
+use page_table_multiarch::PagingHandler;
 use memory_addr::{PhysAddr, VirtAddr};
 
 pub struct PagingHandlerImpl;

@@ -78,7 +78,7 @@ impl Ext4DiskWrapper {
         let read_size = if self.offset == 0 && buf.len() >= BLOCK_SIZE {
             // whole block
             let dev = match try_get_block_driver(self.dev_id) { Ok(d) => d, Err(e) => { error!("Ext4DevOp failed to get block device {}: {}. Returning EIO.", self.dev_id, e); return Err(-5);  } };
-            dev.read(self.block_id, &mut buf[0..BLOCK_SIZE]);
+            let _ = dev.read(self.block_id, &mut buf[0..BLOCK_SIZE]);
             self.block_id += 1;
             BLOCK_SIZE
         } else {
@@ -91,7 +91,7 @@ impl Ext4DiskWrapper {
             }
 
             let dev = match try_get_block_driver(self.dev_id) { Ok(d) => d, Err(e) => { error!("Ext4DevOp failed to get block device {}: {}. Returning EIO.", self.dev_id, e); return Err(-5);  } };
-            dev.read(self.block_id, &mut data);
+            let _ = dev.read(self.block_id, &mut data);
             buf[..count].copy_from_slice(&data[start..start + count]);
 
             self.offset += count;
@@ -108,7 +108,7 @@ impl Ext4DiskWrapper {
         let write_size = if self.offset == 0 && buf.len() >= BLOCK_SIZE {
             // whole block
             let dev = match try_get_block_driver(self.dev_id) { Ok(d) => d, Err(e) => { error!("Ext4DevOp failed to get block device {}: {}. Returning EIO.", self.dev_id, e); return Err(-5);  } };
-            dev.write(self.block_id, &buf[0..BLOCK_SIZE]);
+            let _ = dev.write(self.block_id, &buf[0..BLOCK_SIZE]);
             self.block_id += 1;
             BLOCK_SIZE
         } else {
@@ -118,10 +118,10 @@ impl Ext4DiskWrapper {
             let count = buf.len().min(BLOCK_SIZE - self.offset);
 
             let dev = match try_get_block_driver(self.dev_id) { Ok(d) => d, Err(e) => { error!("Ext4DevOp failed to get block device {}: {}. Returning EIO.", self.dev_id, e); return Err(-5);  } };
-            dev.read(self.block_id, &mut data);
+            let _ = dev.read(self.block_id, &mut data);
             data[start..start + count].copy_from_slice(&buf[..count]);
             let dev = match try_get_block_driver(self.dev_id) { Ok(d) => d, Err(e) => { error!("Ext4DevOp failed to get block device {}: {}. Returning EIO.", self.dev_id, e); return Err(-5);  } };
-            dev.write(self.block_id, &data);
+            let _ = dev.write(self.block_id, &data);
 
             self.offset += count;
             if self.offset >= BLOCK_SIZE {
@@ -245,7 +245,7 @@ pub struct Ext4FileWrapper {
 unsafe impl Send for Ext4FileWrapper {}
 unsafe impl Sync for Ext4FileWrapper {}
 
-pub fn InodeTypes_2_FileType(inodetype: InodeTypes) -> FileType {
+pub fn inode_types_2_file_type(inodetype: InodeTypes) -> FileType {
     match inodetype {
         InodeTypes::EXT4_DE_DIR => FileType::Directory,
         InodeTypes::EXT4_DE_UNKNOWN => FileType::File,
@@ -263,7 +263,7 @@ impl Ext4FileWrapper {
     pub fn new(path: &str, types: InodeTypes) -> Self {
         info!("FileWrapper new {:?} {}", types, path);
         let file = Ext4File::new(path, types.clone());
-        let file_type = InodeTypes_2_FileType(types);
+        let file_type = inode_types_2_file_type(types);
         Self {
             inner: Mutex::new(file),
             file_type: file_type,
@@ -451,7 +451,7 @@ impl Inode for Ext4FileWrapper {
             ans.push(DirEntry {
                 filename,
                 len: 0,
-                file_type: InodeTypes_2_FileType(file_type),
+                file_type: inode_types_2_file_type(file_type),
             })
         }
         Ok(ans)

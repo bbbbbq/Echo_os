@@ -1,30 +1,21 @@
 #![no_std]
 #![no_main]
+use alloc::vec;
 use console::println;
 use core::panic::PanicInfo;
-use core::ptr::NonNull;
 use device::init_dt;
 use filesystem::init_fs;
 use filesystem::file::File;
 use filesystem::path::Path;
 use filesystem::vfs::OpenFlags;
-use flat_device_tree;
-use flat_device_tree::{node::FdtNode, standard_nodes::Compatible, Fdt};
 use heap;
-use device::device_set::{get_device, get_block_device}; // Changed to get_block_device
-use virtio::blk::VirtioBlkDriver;
-use device::{Driver, BlockDriver}; // define module removed
-use device::DeviceType as EchoDeviceType; // define module removed
-use log::{debug, error, info, warn};
-use virtio::halimpl::HalImpl;
+ // Changed to get_block_device
+ // define module removed
+ // define module removed
+use log::{error, info};
 extern crate alloc;
-use alloc::vec;
 use crate::alloc::string::ToString;
 use boot;
-use device::device_set;
-use frame;
-use alloc::sync::Arc;
-
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     if let Some(location) = info.location() {
@@ -52,7 +43,8 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     init_fs();
     
     info!("kernel_end");
-    test_file();
+    // test_file();
+    // test_thread();
     arch::os_shut_down();
     loop {}
 }
@@ -98,3 +90,9 @@ pub fn test_file() {
         }
     }
 }
+
+// pub fn test_thread() {
+//     let path = Path::new("/test/hello".to_string());
+//     let file = File::open(path, OpenFlags::O_RDONLY).unwrap();
+//     let _thread = proc::thread::Thread::new_thread(file, vec![], "hello".to_string(), vec![]);
+// }

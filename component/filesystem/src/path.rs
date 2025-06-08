@@ -1,5 +1,4 @@
 
-use alloc::sync::Arc;
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;

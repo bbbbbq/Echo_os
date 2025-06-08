@@ -82,6 +82,7 @@ clean:
 	@echo "=== 清理编译产物 ==="
 	cargo clean
 	-rm -f $(KERNEL_BIN)
+	-rm -f fs.img
 
 # 创建并填充文件系统镜像
 .PHONY: fs-img

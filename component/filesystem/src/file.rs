@@ -7,6 +7,7 @@ use alloc::vec::Vec;
 use crate::mount::get_mount_node;
 
 
+#[derive(Clone)]
 pub struct File {
     pub inner: Arc<dyn Inode>,
     pub openflags: OpenFlags,

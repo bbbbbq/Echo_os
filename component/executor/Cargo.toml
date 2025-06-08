@@ -1,5 +1,5 @@
 [package]
-name = "proc"
+name = "executor"
 version = "0.1.0"
 edition = "2024"
 
@@ -7,5 +7,6 @@ edition = "2024"
 uint_allocator = { workspace = true }
 lazy_static = { workspace = true }
 spin = { workspace = true }
-mem = { workspace = true }
-filesystem = { workspace = true }
+hashbrown =  { workspace = true }
+downcast-rs = { workspace = true }
+log = { workspace = true }

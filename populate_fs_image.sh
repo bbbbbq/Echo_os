@@ -49,6 +49,26 @@ echo "Hello from Echo OS! This is the root directory." | sudo tee "${MOUNT_POINT
 echo "Some important notes for our OS." | sudo tee "${MOUNT_POINT}/data/notes.txt" > /dev/null
 echo "Configuration file example." | sudo tee "${MOUNT_POINT}/etc/config.conf" > /dev/null
 
+# Create test directory and copy ELF files from host's ./test directory
+sudo mkdir -p "${MOUNT_POINT}/test"
+echo "--- Copying ELF files to ${MOUNT_POINT}/test..."
+# Copy hello_elf as 'hello' for the kernel test
+if [ -f "./test/hello_elf" ]; then
+    sudo cp "./test/hello_elf" "${MOUNT_POINT}/test/hello"
+    echo "Copied ./test/hello_elf to ${MOUNT_POINT}/test/hello"
+else
+    echo "Error: ./test/hello_elf not found. This is required for the kernel test."
+    # Consider exiting if this file is critical for the image build
+    # exit 1 
+fi
+# Copy world_elf as 'world'
+if [ -f "./test/world_elf" ]; then
+    sudo cp "./test/world_elf" "${MOUNT_POINT}/test/world"
+    echo "Copied ./test/world_elf to ${MOUNT_POINT}/test/world"
+else
+    echo "Warning: ./test/world_elf not found. Skipping copy."
+fi
+
 # Create a dummy executable (optional)
 sudo touch "${MOUNT_POINT}/usr/bin/myapp"
 sudo chmod +x "${MOUNT_POINT}/usr/bin/myapp"

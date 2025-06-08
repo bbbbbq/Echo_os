@@ -1,7 +1,7 @@
 use alloc::string::String; use alloc::sync::Arc;
 use alloc::vec::Vec;
 use alloc::vec; use crate::vfs::{DirEntry, FileSystem, FsType, Inode, VfsResult, FileType, VfsError, FileAttr};
-use crate::path::Path; use spin::Mutex; use lazy_static::lazy_static;
+  
 use super::null::NullDev;
 use super::zero::ZeroDev;
 use super::uart::UartDev;

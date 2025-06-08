@@ -2,7 +2,6 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use crate::path::Path;
 use crate::vfs::{Inode, FileSystem};
-use lazy_static::*;
 use spin::Mutex;
 use log::trace;
 use lazy_static::lazy_static;
