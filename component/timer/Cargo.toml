@@ -1,0 +1,13 @@
+[package]
+name = "timer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+log = { workspace = true }
+spin = { workspace = true }
+cfg-if = { workspace = true }
+
+[target.'cfg(target_arch = "riscv64")'.dependencies]
+sbi-rt = "0.0.3"
+riscv = "0.13.0"

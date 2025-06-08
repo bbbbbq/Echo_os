@@ -1,13 +1,12 @@
 use core::task::{Context, Poll};
+use core::future::Future;
 
 use alloc::{collections::VecDeque, vec::Vec};
 use hashbrown::HashMap;
 use spin::Mutex;
-
+use alloc::boxed::Box;
 use crate::{
-    id::TaskId,
-    task_def::{Task, TaskTrait},
-    waker::Waker,
+    id::TaskId, kernel_task::KernelTask, task_def::{Task, TaskTrait}, waker::Waker
 };
 
 use alloc::sync::Arc;
@@ -28,17 +27,15 @@ lazy_static!
     pub static ref GLOBLE_EXECUTOR:Executor = Executor::new();
 }
 
-pub fn get_task_by_id(id: TaskId) -> Option<Arc<dyn TaskTrait>> // Return type changed
+pub fn get_task_by_id(id: TaskId) -> Option<Arc<dyn TaskTrait>>
 {
     let task_queue = TASK_QUEUE.lock();
     for task_option in task_queue.iter()
-    // Iterates over &Option<Task>
     {
         if let Some(task_ref) = task_option
-        // task_ref is &Task
         {
             if task_ref.task_inner.get_task_id() == id {
-                return Some(task_ref.task_inner.clone()); // Clone the Arc<dyn TaskTrait> from task_inner
+                return Some(task_ref.task_inner.clone());
             }
         }
     }
@@ -64,8 +61,8 @@ impl Executor {
 
     pub fn run(&mut self) {
         if let Some(Some(owned_task)) = TASK_QUEUE.lock().pop_front() {
-            let task_inner = owned_task.task_inner; // Moves Arc<dyn TaskTrait>
-            let mut task_future = owned_task.task_future; // Moves PinedFuture, made mutable
+            let task_inner = owned_task.task_inner;
+            let mut task_future = owned_task.task_future;
             task_inner.before_run();
             *self.cur_task[0].lock() = Some(task_inner.clone());
             let waker = Arc::new(Waker {
@@ -91,9 +88,28 @@ pub fn get_cur_task()->Option<Arc<dyn TaskTrait>>
     GLOBLE_EXECUTOR.cur_task[0].lock().clone()    
 }
 
-pub fn spawn(task: Task) {
-    TASK_HASH_MAP.lock().insert(task.task_inner.get_task_id(), task.task_inner.clone());
-    TASK_QUEUE.lock().push_back(Some(task)); // Push the Task directly
+pub fn spawn(task: Task, future: impl Future<Output = ()> + Send + Sync + 'static) {
+    let task_inner_arc = task.task_inner; // 从传入的 task 中获取 task_inner
+    let task_id = task_inner_arc.get_task_id();
+
+    // 创建一个新的 Task 实例，使用传入的 future
+    let task_to_queue = Task {
+        task_inner: task_inner_arc.clone(), // 克隆 Arc 以便存储
+        task_future: Box::pin(future),      // 将传入的 future 包装成 PinedFuture
+    };
+
+    TASK_QUEUE.lock().push_back(Some(task_to_queue));
+    TASK_HASH_MAP.lock().insert(task_id, task_inner_arc); // 将 task_inner 存入哈希表
 }
 
 
+pub fn spawn_kernel_task(future: impl Future<Output = ()> + Send + Sync + 'static) {
+    let kernel_task_obj = KernelTask::new();
+    let kernel_task_arc: Arc<dyn TaskTrait> = Arc::new(kernel_task_obj);
+
+    TASK_QUEUE.lock().push_back(Some(Task {
+        task_inner: kernel_task_arc.clone(),
+        task_future: Box::pin(future),
+    }));
+    TASK_HASH_MAP.lock().insert(kernel_task_arc.get_task_id(), kernel_task_arc.clone());
+}

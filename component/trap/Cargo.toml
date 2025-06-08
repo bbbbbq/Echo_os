@@ -1,0 +1,11 @@
+[package]
+name = "trap"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+log = { workspace = true }
+timer = { path = "../timer" }
+
+[target.'cfg(target_arch = "riscv64")'.dependencies]
+riscv = "0.13.0"

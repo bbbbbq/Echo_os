@@ -31,6 +31,15 @@ impl ProcId {
     }
 }
 
+pub fn alloc_task_id() -> TaskId {
+    TaskId(TASKID_ALLOCATOR.lock().alloc().unwrap())
+}
+
+pub fn alloc_proc_id() -> ProcId {
+    ProcId(PROCID_ALLOCATOR.lock().alloc().unwrap())
+}
+
+
 
 
 

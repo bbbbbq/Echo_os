@@ -1,14 +1,14 @@
-use crate::{ExitCode, TaskType, id::TaskId};
+use crate::{id::{alloc_task_id, TaskId}, ExitCode, TaskType};
 
 use super::task_def::TaskTrait;
 
 pub struct KernelTask {
-    kernel_task_id: usize,
+    kernel_task_id: TaskId,
 }
 
 impl TaskTrait for KernelTask {
     fn get_task_id(&self) -> TaskId {
-        TaskId(self.kernel_task_id)
+        self.kernel_task_id
     }
 
     fn get_task_type(&self) -> TaskType {
@@ -24,5 +24,15 @@ impl TaskTrait for KernelTask {
     fn exit(&self) {
         unimplemented!();
     }
+}
+
+
+impl KernelTask {
+    pub fn new() -> Self {
+        let id = alloc_task_id();
+        Self {
+            kernel_task_id: id,
+        }
+    }    
 }
 
