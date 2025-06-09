@@ -9,6 +9,7 @@ pub mod select;
 pub mod executor;
 pub mod waker;
 pub mod kernel_task;
+pub mod ops;
 
 pub enum TaskType {
     Kernel,

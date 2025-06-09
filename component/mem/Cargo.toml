@@ -8,9 +8,11 @@ test = false
 bench = false
 
 [dependencies]
+riscv = "0.13.0"
 page_table_multiarch = { version = "0.5.3"}
 memory_addr = { workspace = true }
 log = { workspace = true }
 config = { workspace = true }
 cfg-if = { workspace = true }
 frame = { workspace = true }
+arch = { workspace = true }
