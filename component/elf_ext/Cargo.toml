@@ -1,0 +1,10 @@
+[package]
+name = "elf_ext"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+xmas-elf = { workspace = true }
+frame = { workspace = true }
+filesystem = { workspace = true }
+config = { workspace = true }
