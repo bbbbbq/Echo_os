@@ -22,7 +22,7 @@ impl PageTable
         }
     }
 
-    pub fn map_region_kernel(&mut self, area: MemRegion) {
+    pub fn map_region_user_frame(&mut self, area: MemRegion) {
         let start_vaddr = area.vaddr_range.start;
         let size = area.vaddr_range.size();
         if PAGE_SIZE == 0 {
@@ -46,13 +46,34 @@ impl PageTable
 
     pub fn map_mem_set(&mut self, mem_set: MemSet) {
         for region in mem_set.regions.into_iter() {
-            self.map_region_kernel(region);
+            self.map_region_user_frame(region);
         }
     }
 
     pub fn change_pagetable(&self)
     {
         change_pagetable(self.page_table.root_paddr().as_usize())
+    }
+
+    pub fn map_region_user(&mut self, region: MemRegion)
+    {
+        if let Some(paddr_range) = region.paddr_range {
+            let start_vaddr = region.vaddr_range.start;
+            let size = region.vaddr_range.size();
+            let get_paddr = |vaddr: VirtAddr| -> PhysAddr {
+                let offset = vaddr.as_usize() - region.vaddr_range.start.as_usize();
+                paddr_range.start.add(offset)
+            };
+
+            let _ = self.page_table.map_region(
+                start_vaddr,
+                get_paddr,
+                size,
+                region.pte_flags,
+                true,
+                true
+            ).expect("Failed to map region in page table");
+        }
     }
 
     pub fn flush()

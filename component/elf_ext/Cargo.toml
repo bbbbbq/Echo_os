@@ -10,4 +10,6 @@ filesystem = { workspace = true }
 config = { workspace = true }
 log = { workspace = true }
 spin = { workspace = true }
-
+mem = { workspace = true }
+memory_addr = "0.3.2"
+page_table_multiarch = "0.5.3"

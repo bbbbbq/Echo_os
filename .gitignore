@@ -21,3 +21,5 @@ qemu.log
 *.swo
 .vscode
 .cargo
+
+mount_point

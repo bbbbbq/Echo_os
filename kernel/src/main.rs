@@ -45,7 +45,8 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     info!("kernel_end");
     // test_file();
     // test_thread();
-    load_elf_frame(Path::new("/test/hello".to_string()));
+    let elf_info = load_elf_frame(Path::new("/busybox".to_string()));
+    info!("elf_info: {:#?}", elf_info);
     arch::os_shut_down();
     loop {}
 }

@@ -14,10 +14,6 @@ lazy_static! {
 pub struct TaskCache {
     pub elf_name: Path,
     pub entry: usize,
-    pub base: usize,
-    pub heap_bottom: usize,
-    pub ph_addr: usize,
-    pub ph_size: usize,
     pub mem_set: MemSet,
 }
 
@@ -27,11 +23,7 @@ impl TaskCache {
         Self {
             elf_name,
             entry: elf_info.entry_point,
-            base: 0,
-            heap_bottom: 0,
-            ph_addr: elf_info.ph_addr,
-            ph_size: elf_info.ph_size,
-            mem_set: MemSet::new(),
+            mem_set: elf_info.memset,
         }
     }
 }
