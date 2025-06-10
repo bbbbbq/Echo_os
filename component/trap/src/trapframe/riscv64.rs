@@ -3,7 +3,7 @@ use core::{
     ops::{Index, IndexMut},
 };
 
-use riscv::register::sstatus::{self, Sstatus, SPP};
+use riscv::register::sstatus::{self, SPP, Sstatus};
 
 use super::TrapFrameArgs;
 

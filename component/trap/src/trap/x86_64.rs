@@ -2,7 +2,7 @@
 mod macros;
 
 use super::{EscapeReason, TrapType};
-use crate::trapframe::{FxsaveArea, TrapFrame, TRAPFRAME_SIZE};
+use crate::trapframe::{FxsaveArea, TRAPFRAME_SIZE, TrapFrame};
 use bitflags::bitflags;
 use core::{
     arch::{global_asm, naked_asm},
@@ -11,18 +11,18 @@ use core::{
 use polyhal::{
     apic::{local_apic, vectors::*},
     consts::{PIC_VECTOR_OFFSET, SYSCALL_VECTOR},
-    gdt::{set_tss_kernel_sp, GdtStruct},
+    gdt::{GdtStruct, set_tss_kernel_sp},
     irq,
     percpu::PerCPUReserved,
 };
 use x86::irq::*;
 use x86_64::{
+    VirtAddr,
     registers::{
         control::Cr2,
         model_specific::{Efer, EferFlags, KernelGsBase, LStar, SFMask, Star},
         rflags::RFlags,
     },
-    VirtAddr,
 };
 
 global_asm!(include_str!("x86_64/trap.S"));

@@ -5,12 +5,10 @@ mod riscv64;
 #[cfg(target_arch = "riscv64")]
 pub use riscv64::*;
 
-
-use log::{set_logger, set_max_level, LevelFilter};
 use log::{Level, Log, Metadata, Record};
+use log::{LevelFilter, set_logger, set_max_level};
 
 struct NoStdLogger;
-
 
 // ANSI color codes
 const COLOR_RED: &str = "\x1b[31m";
@@ -36,7 +34,7 @@ impl Log for NoStdLogger {
             Level::Debug => COLOR_BLUE,
             Level::Trace => COLOR_MAGENTA,
         };
-        
+
         let _ = writeln!(
             writer,
             "{}[{}] {}:{} - {}{}",
@@ -73,11 +71,11 @@ macro_rules! print {
 
 pub fn init() {
     static LOGGER: NoStdLogger = NoStdLogger;
-    
+
     let log_level = LevelFilter::Trace;
-    
+
     set_logger(&LOGGER).unwrap();
     set_max_level(log_level);
-    
+
     println!("Log level set to: {:?}", log_level);
 }

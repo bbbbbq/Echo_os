@@ -1,5 +1,5 @@
 /// Macro to export a function as the kernel entry point with name "kernel_main"
-/// 
+///
 /// # Example
 /// ```
 /// #[kernel_main]

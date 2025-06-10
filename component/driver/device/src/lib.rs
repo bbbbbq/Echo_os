@@ -1,21 +1,21 @@
 #![no_std]
 
-extern crate log;
 extern crate alloc;
+extern crate log;
 
 pub mod device_set;
-pub use driver_api::{DeviceType, Driver, BlockDriver};
-pub use device_set::{DEVICE_SET, push_device, get_device, get_block_device};
+pub use device_set::{DEVICE_SET, get_block_device, get_device, push_device};
+pub use driver_api::{BlockDriver, DeviceType, Driver};
 
 use alloc::boxed::Box;
-use flat_device_tree::{node::FdtNode, Fdt};
+use flat_device_tree::{Fdt, node::FdtNode};
 use log::info;
 // virtio_drivers::transport::DeviceType will be used via its full path
-use virtio_drivers::transport::mmio::MmioTransport;
-use log::warn;
 use core::ptr::NonNull;
-use virtio_drivers::transport::mmio::VirtIOHeader;
+use log::warn;
 use virtio_drivers::transport::Transport;
+use virtio_drivers::transport::mmio::MmioTransport;
+use virtio_drivers::transport::mmio::VirtIOHeader;
 
 pub fn init_dt(dtb: usize) {
     info!("device tree @ {:#x}", dtb);
@@ -23,8 +23,6 @@ pub fn init_dt(dtb: usize) {
     let fdt = unsafe { Fdt::from_ptr(dtb as *const u8).unwrap() };
     walk_dt(fdt);
 }
-
-
 
 pub fn walk_dt(fdt: Fdt) {
     for node in fdt.all_nodes() {
@@ -35,8 +33,6 @@ pub fn walk_dt(fdt: Fdt) {
         }
     }
 }
-
-
 
 pub fn virtio_probe(node: FdtNode) {
     if let Some(reg) = node.reg().next() {
@@ -53,7 +49,6 @@ pub fn virtio_probe(node: FdtNode) {
     }
 }
 
-
 unsafe extern "C" {
     fn block_device(transport: *mut u8);
 }
@@ -64,7 +59,7 @@ pub fn virtio_device(transport: impl Transport + Send + Sync + 'static) {
             let transport_box = Box::new(transport);
             let transport_ptr = Box::into_raw(transport_box) as *mut u8;
             unsafe { block_device(transport_ptr) };
-        },
+        }
         t => warn!("Unrecognized virtio device: {:?}", t),
     }
 }

@@ -39,7 +39,7 @@ fn kernel_callback(context: &mut TrapFrame) -> TrapType {
             TrapType::Breakpoint
         }
         Trap::Exception(Exception::LoadFault) => {
-                panic!("kernel error: {:#x}", stval);
+            panic!("kernel error: {:#x}", stval);
             TrapType::Unknown
         }
         Trap::Exception(Exception::UserEnvCall) => TrapType::SysCall,

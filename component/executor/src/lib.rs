@@ -2,14 +2,13 @@
 
 extern crate alloc;
 
-
-pub mod task_def;
-pub mod id;
-pub mod select;
 pub mod executor;
-pub mod waker;
+pub mod id;
 pub mod kernel_task;
 pub mod ops;
+pub mod select;
+pub mod task_def;
+pub mod waker;
 
 pub enum TaskType {
     Kernel,

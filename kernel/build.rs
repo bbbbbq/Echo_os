@@ -31,7 +31,10 @@ fn gen_linker_script() -> Result<()> {
     let linker_template_path = Path::new(&manifest_dir).join("linker.ld");
 
     let ld_content_template = fs::read_to_string(&linker_template_path).map_err(|e| {
-        eprintln!("Failed to read linker script template at {:?}: {}", linker_template_path, e);
+        eprintln!(
+            "Failed to read linker script template at {:?}: {}",
+            linker_template_path, e
+        );
         e
     })?;
 
@@ -43,7 +46,10 @@ fn gen_linker_script() -> Result<()> {
     let final_script_path = Path::new(&out_dir).join(linker_script_name);
 
     fs::write(&final_script_path, final_ld_content).map_err(|e| {
-        eprintln!("Failed to write final linker script to {:?}: {}", final_script_path, e);
+        eprintln!(
+            "Failed to write final linker script to {:?}: {}",
+            final_script_path, e
+        );
         e
     })?;
 

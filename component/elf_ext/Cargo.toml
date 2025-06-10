@@ -8,3 +8,6 @@ xmas-elf = { workspace = true }
 frame = { workspace = true }
 filesystem = { workspace = true }
 config = { workspace = true }
+log = { workspace = true }
+spin = { workspace = true }
+

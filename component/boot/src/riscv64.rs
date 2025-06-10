@@ -1,6 +1,6 @@
-use core::{arch::naked_asm, ptr::addr_of_mut, arch::global_asm};
-use riscv::register::satp;
 use config::target::plat::VIRT_ADDR_START;
+use core::{arch::global_asm, arch::naked_asm, ptr::addr_of_mut};
+use riscv::register::satp;
 // Define PTE flags as a simple bitflags enum
 use bitflags::bitflags;
 use console::println;
@@ -23,10 +23,8 @@ bitflags! {
     }
 }
 
-
-
 #[unsafe(link_section = ".data.boot_page_table")]
-static mut BOOT_PT: [u64; 512] = [0;512];
+static mut BOOT_PT: [u64; 512] = [0; 512];
 
 unsafe extern "C" fn init_boot_page_table() {
     let boot_pt = unsafe { addr_of_mut!(BOOT_PT).as_mut().unwrap() };
@@ -46,7 +44,6 @@ unsafe extern "C" fn init_mmu() {
     unsafe { satp::set(satp::Mode::Sv39, 0, ptr >> 12) };
     riscv::asm::sfence_vma_all();
 }
-
 
 #[unsafe(naked)]
 #[unsafe(no_mangle)]
@@ -79,10 +76,8 @@ unsafe extern "C" fn _start() -> ! {
     )
 }
 
-
-unsafe extern "C" 
-{
-    fn kernel_main(hartid:usize,dtb:usize);
+unsafe extern "C" {
+    fn kernel_main(hartid: usize, dtb: usize);
 }
 
 global_asm!(
@@ -98,12 +93,11 @@ global_asm!(
 );
 
 pub fn rust_entry(hartid: usize, dtb: usize) {
-    if dtb != 0xbfe00000
-    {
-        println!("dtb : {:x}",dtb);
-        loop{}
+    if dtb != 0xbfe00000 {
+        println!("dtb : {:x}", dtb);
+        loop {}
     }
-    
+
     unsafe {
         kernel_main(hartid, dtb);
     }

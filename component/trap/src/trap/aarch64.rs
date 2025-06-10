@@ -1,10 +1,10 @@
 use core::arch::{global_asm, naked_asm};
 
-use aarch64_cpu::registers::{Writeable, ESR_EL1, FAR_EL1, VBAR_EL1};
+use aarch64_cpu::registers::{ESR_EL1, FAR_EL1, VBAR_EL1, Writeable};
 use tock_registers::interfaces::Readable;
 
 use crate::trapframe::TrapFrame;
-use polyhal::irq::{get_irq, TIMER_IRQ_NUM};
+use polyhal::irq::{TIMER_IRQ_NUM, get_irq};
 use polyhal::timer::set_next_timer;
 
 use super::{EscapeReason, TrapType};

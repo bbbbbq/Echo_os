@@ -1,12 +1,12 @@
-use alloc::string::String; use alloc::sync::Arc;
+use crate::vfs::{DirEntry, FileAttr, FileSystem, FileType, FsType, Inode, VfsError, VfsResult};
+use alloc::string::String;
+use alloc::sync::Arc;
+use alloc::vec;
 use alloc::vec::Vec;
-use alloc::vec; use crate::vfs::{DirEntry, FileSystem, FsType, Inode, VfsResult, FileType, VfsError, FileAttr};
-  
+
 use super::null::NullDev;
-use super::zero::ZeroDev;
 use super::uart::UartDev;
-
-
+use super::zero::ZeroDev;
 
 #[derive(Debug)]
 pub struct DevFs {}
@@ -18,7 +18,7 @@ impl DevFs {
 }
 
 #[derive(Debug)]
-pub struct DevFsDirInode; 
+pub struct DevFsDirInode;
 impl DevFsDirInode {
     pub fn new() -> Self {
         DevFsDirInode
@@ -27,10 +27,11 @@ impl DevFsDirInode {
 
 impl Inode for DevFsDirInode {
     fn read_dir(&self) -> VfsResult<Vec<DirEntry>> {
-                Ok(vec![
+        Ok(vec![
             DirEntry {
                 filename: String::from("null"),
-                len: 0,                 file_type: FileType::CharDevice,
+                len: 0,
+                file_type: FileType::CharDevice,
             },
             DirEntry {
                 filename: String::from("zero"),
@@ -84,7 +85,8 @@ impl Inode for DevFsDirInode {
 
     fn getattr(&self) -> VfsResult<FileAttr> {
         Ok(FileAttr {
-            size: 0,             file_type: FileType::Directory,
+            size: 0,
+            file_type: FileType::Directory,
         })
     }
 }

@@ -8,14 +8,11 @@ pub unsafe fn os_shut_down() -> ! {
 
 #[derive(Debug, Copy, Clone, Default)]
 #[repr(C)]
-pub struct FpState {
-}
+pub struct FpState {}
 
 impl FpState {
     pub fn new() -> Self {
-        Self {
-            ..Self::default()
-        }
+        Self { ..Self::default() }
     }
 
     pub unsafe fn save(&mut self) {

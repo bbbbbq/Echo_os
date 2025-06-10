@@ -1,22 +1,19 @@
+use crate::Driver;
 use lazy_static::*;
 use spin::Mutex;
-use crate::Driver;
 extern crate alloc;
-use alloc::sync::Arc;
-use alloc::vec::Vec;
+use crate::BlockDriver;
 use crate::DeviceType;
-use crate::BlockDriver; // For the new get_block_device function
+use alloc::sync::Arc;
+use alloc::vec::Vec; // For the new get_block_device function
 
-lazy_static!
-{
-    pub static ref DEVICE_SET:Mutex<Vec<Arc<dyn Driver>>> = Mutex::new(Vec::new());
+lazy_static! {
+    pub static ref DEVICE_SET: Mutex<Vec<Arc<dyn Driver>>> = Mutex::new(Vec::new());
 }
 
-pub fn push_device(device: Arc<dyn Driver>) 
-{
+pub fn push_device(device: Arc<dyn Driver>) {
     DEVICE_SET.lock().push(device);
 }
-
 
 pub fn get_device(id: usize) -> Option<Arc<dyn Driver>> {
     let devices = DEVICE_SET.lock();
@@ -27,7 +24,6 @@ pub fn get_device(id: usize) -> Option<Arc<dyn Driver>> {
     }
     None
 }
-
 
 pub fn get_block_device(id: usize) -> Option<Arc<dyn BlockDriver>> {
     let device_arc = get_device(id)?;

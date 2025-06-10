@@ -106,7 +106,7 @@ impl FrameAllocator {
         if base_frame.paddr.as_usize() < self.start.as_usize() {
             return false;
         }
-        
+
         let base_idx = (base_frame.paddr.as_usize() - self.start.as_usize()) / PAGE_SIZE;
         if base_idx + count > self.bitmap.len() {
             return false;
@@ -134,6 +134,23 @@ pub fn alloc_continues(count: usize) -> Vec<FrameTracer> {
 
 pub fn dealloc_continues(base: FrameTracer, count: usize) -> bool {
     FRAME_ALLOCATOR.lock().dealloc_continues(base, count)
+}
+
+pub fn is_allocated(addr: usize) -> bool {
+    FRAME_ALLOCATOR
+        .lock()
+        .bitmap
+        .get((addr - FRAME_ALLOCATOR.lock().start.as_usize()) / PAGE_SIZE)
+        .unwrap_or(false)
+}
+
+pub fn is_continues_allocated(base: usize, count: usize) -> bool {
+    for i in 0..count {
+        if !is_allocated(base + i * PAGE_SIZE) {
+            return false;
+        }
+    }
+    true
 }
 
 /// Tests if frames allocated by alloc_continues are properly 4K-aligned
@@ -224,27 +241,33 @@ pub fn test_frame_allocation() -> (usize, usize) {
 pub fn test() -> (usize, usize) {
     let mut success = 0;
     let mut failure = 0;
-    
+
     log::info!("Running memory frame alignment tests...");
     let (s, f) = test_frame_allocation();
     if f > 0 {
-        log::error!("Frame alignment tests failed: {} failures, {} successes", f, s);
+        log::error!(
+            "Frame alignment tests failed: {} failures, {} successes",
+            f,
+            s
+        );
     } else {
         log::info!("All frame alignment tests passed: {} successes", s);
     }
-    
+
     success += s;
     failure += f;
-    
+
     // Test specifically the size needed for VirtIO (usually 2 pages)
     let virtio_frames_aligned = test_frame_alignment(2);
     if virtio_frames_aligned {
         log::info!("VirtIO frame alignment test passed");
         success += 1;
     } else {
-        log::error!("VirtIO frame alignment test failed - frames not properly aligned to 4K boundaries");
+        log::error!(
+            "VirtIO frame alignment test failed - frames not properly aligned to 4K boundaries"
+        );
         failure += 1;
     }
-    
+
     (success, failure)
 }

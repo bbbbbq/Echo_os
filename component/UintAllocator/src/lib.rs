@@ -6,13 +6,11 @@ use spin::Mutex;
 
 // Re-export dependencies needed by the macro
 pub use lazy_static::lazy_static;
-pub struct UintAllocator
-{
+pub struct UintAllocator {
     start: usize,
     end: usize,
-    recycled: Vec<usize>
+    recycled: Vec<usize>,
 }
-
 
 impl UintAllocator {
     pub fn new(start: usize, end: usize) -> Self {
@@ -38,8 +36,7 @@ impl UintAllocator {
     pub fn dealloc(&mut self, uint: usize) {
         if uint >= self.start || uint < self.end {
             self.recycled.push(uint);
-        } else
-        {
+        } else {
             panic!("uint_allocator dealloc error");
         }
     }
@@ -49,7 +46,7 @@ impl UintAllocator {
 macro_rules! create_uint_allocator {
     ($name:ident, $start:expr, $end:expr) => {
         lazy_static::lazy_static! {
-            pub static ref $name: spin::Mutex<$crate::UintAllocator> = 
+            pub static ref $name: spin::Mutex<$crate::UintAllocator> =
                 spin::Mutex::new($crate::UintAllocator::new($start, $end));
         }
     };

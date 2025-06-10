@@ -2,11 +2,11 @@
 
 extern crate alloc;
 
-pub mod halimpl;
 pub mod blk;
+pub mod halimpl;
 
-use flat_device_tree::{node::FdtNode, Fdt};
-use log::{info, warn};
-use virtio_drivers::transport::mmio::{MmioTransport, VirtIOHeader};
-use virtio_drivers::transport::DeviceType;
 use core::ptr::NonNull;
+use flat_device_tree::{Fdt, node::FdtNode};
+use log::{info, warn};
+use virtio_drivers::transport::DeviceType;
+use virtio_drivers::transport::mmio::{MmioTransport, VirtIOHeader};

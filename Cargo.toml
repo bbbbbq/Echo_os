@@ -34,3 +34,4 @@ xmas-elf = "0.7"
 hashbrown = "0.15.2"
 executor = { path = "component/executor" }
 trap = {path = "component/trap"}
+elf_ext = { path = "component/elf_ext"}

@@ -1,20 +1,18 @@
 use alloc::string::String;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
+use executor::id::{ProcId, TaskId, alloc_task_id};
 use executor::task_def::TaskTrait;
-use mem::pagetable::PageTable;     // 保留这个路径，假设 'pagetable' 是正确的模块名
-use executor::id::{alloc_task_id, ProcId, TaskId};
-use mem::memset::MemSet;
+use executor::{ExitCode, TaskType};
 use filesystem::fd_table::FdTable;
 use filesystem::path::Path;
-use trap::trapframe::TrapFrame;
+use mem::memset::MemSet;
+use mem::pagetable::PageTable; // 保留这个路径，假设 'pagetable' 是正确的模块名
 use spin::RwLock;
-use executor::{ExitCode, TaskType};
+use trap::trapframe::TrapFrame;
 
-
-pub struct ProcessControlBlock
-{
-    pub pagetable:PageTable,
+pub struct ProcessControlBlock {
+    pub pagetable: PageTable,
     pub mem_set: MemSet,
     pub fd_table: FdTable,
     pub cwd: Path,
@@ -22,26 +20,22 @@ pub struct ProcessControlBlock
     pub children: Vec<Arc<UserTask>>,
     pub threads: Vec<Weak<UserTask>>,
     pub exit_code: usize,
-    pub pro_id:ProcId,
+    pub pro_id: ProcId,
 }
 
-pub struct ThreadControlBlock
-{
+pub struct ThreadControlBlock {
     pub context: TrapFrame,
-    pub thread_id:TaskId,
-    pub thread_exit_code:u64,
+    pub thread_id: TaskId,
+    pub thread_exit_code: u64,
 }
 
-pub struct UserTask
-{
-    pub pcb:RwLock<ProcessControlBlock>,
-    pub tcb:RwLock<ThreadControlBlock>,
-    pub parent: Arc<Weak<UserTask>>
+pub struct UserTask {
+    pub pcb: RwLock<ProcessControlBlock>,
+    pub tcb: RwLock<ThreadControlBlock>,
+    pub parent: Arc<Weak<UserTask>>,
 }
 
-
-impl TaskTrait for UserTask
-{
+impl TaskTrait for UserTask {
     fn get_task_id(&self) -> TaskId {
         self.tcb.read().thread_id
     }
@@ -62,20 +56,19 @@ impl TaskTrait for UserTask
     fn exit(&self) {
         // 实际的退出逻辑会很复杂，包括资源清理、通知父进程、调度等。
         // log::info!("Task {} received exit signal.", self.get_task_id().0);
-        todo!("UserTask exit logic needs to be implemented, including resource cleanup, 
+        todo!(
+            "UserTask exit logic needs to be implemented, including resource cleanup, 
                notifying parent, setting exit codes in pcb/tcb, 
-               and potentially process termination if it's the last thread.");
+               and potentially process termination if it's the last thread."
+        );
     }
 }
 
-
-impl UserTask
-{
-    pub fn new(parent:Weak<UserTask>,cur_dir:Path) -> Self
-    {
+impl UserTask {
+    pub fn new(parent: Weak<UserTask>, cur_dir: Path) -> Self {
         let thread_id = alloc_task_id();
         let process_id = ProcId::new();
-        
+
         Self {
             pcb: RwLock::new(ProcessControlBlock {
                 pro_id: process_id,
@@ -104,7 +97,3 @@ impl UserTask
     //     []
     // }
 }
-
-
-
-

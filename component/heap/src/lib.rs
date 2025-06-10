@@ -3,9 +3,9 @@
 extern crate alloc;
 
 use buddy_system_allocator::LockedHeap;
+use config::target::plat::HEAP_SIZE;
 use core::ptr;
 use log::info;
-use config::target::plat::HEAP_SIZE;
 
 // 堆空间
 #[unsafe(link_section = ".bss.heap")]
@@ -20,11 +20,9 @@ pub fn init() {
     unsafe {
         // Get the heap memory address using raw pointer operations
         let heap_start = ptr::addr_of_mut!(HEAP_SPACE) as usize;
-        
+
         // Initialize the allocator with the address and size
-        HEAP_ALLOCATOR
-            .lock()
-            .init(heap_start, HEAP_SIZE);
+        HEAP_ALLOCATOR.lock().init(heap_start, HEAP_SIZE);
 
         info!(
             "kernel HEAP init: {:#x} - {:#x}  size: {:#x}",

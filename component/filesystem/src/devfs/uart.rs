@@ -1,8 +1,8 @@
-use crate::vfs::{FileType, VfsError, Inode, DirEntry, FileSystem, FileAttr};
 use crate::path::Path;
+use crate::vfs::VfsResult;
+use crate::vfs::{DirEntry, FileAttr, FileSystem, FileType, Inode, VfsError};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use crate::vfs::VfsResult;
 use console::print;
 pub struct UartDev {
     file_type: FileType,

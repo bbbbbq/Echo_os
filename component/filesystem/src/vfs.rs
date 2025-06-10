@@ -1,8 +1,8 @@
+use crate::path::Path;
 use core::marker::Send;
 use core::marker::Sync;
 use core::result::Result;
-use downcast_rs::{impl_downcast, DowncastSync};
-use crate::path::Path;
+use downcast_rs::{DowncastSync, impl_downcast};
 extern crate alloc;
 use alloc::string::String;
 use alloc::sync::Arc;

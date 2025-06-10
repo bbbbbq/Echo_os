@@ -1,7 +1,7 @@
 use core::pin::Pin;
 
 use alloc::{boxed::Box, sync::Arc};
-use downcast_rs::{impl_downcast, DowncastSync};
+use downcast_rs::{DowncastSync, impl_downcast};
 
 use super::id::TaskId;
 use crate::{ExitCode, TaskType};
@@ -22,14 +22,7 @@ impl_downcast!(sync TaskTrait);
 
 pub type PinedFuture = Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>;
 
-
-pub struct Task
-{
-    pub task_inner:Arc<dyn TaskTrait>,
-    pub task_future:PinedFuture,
+pub struct Task {
+    pub task_inner: Arc<dyn TaskTrait>,
+    pub task_future: PinedFuture,
 }
-
-
-
-
-

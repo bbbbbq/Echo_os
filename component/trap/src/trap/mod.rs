@@ -4,7 +4,6 @@
 
 use super::trapframe::TrapFrame;
 
-
 #[derive(Debug, Clone, Copy)]
 pub enum TrapType {
     Breakpoint,
@@ -15,7 +14,7 @@ pub enum TrapType {
     StorePageFault(usize),
     LoadPageFault(usize),
     InstructionPageFault(usize),
-    IllegalInstruction(usize)
+    IllegalInstruction(usize),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,7 +40,6 @@ impl From<TrapType> for EscapeReason {
 unsafe extern "Rust" {
     pub(crate) fn _interrupt_for_arch(ctx: &mut TrapFrame, trap_type: TrapType, token: usize);
 }
-
 
 #[cfg(target_arch = "riscv64")]
 mod riscv64;

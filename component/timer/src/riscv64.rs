@@ -1,6 +1,6 @@
+use core::time::Duration;
 use riscv::register::time;
 use sbi_rt::set_timer;
-use core::time::Duration;
 
 const CLOCK_FREQ: u64 = 10_000_000;
 const TIMER_INTERVAL_MS: u64 = 10;

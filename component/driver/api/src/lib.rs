@@ -1,7 +1,7 @@
 #![no_std]
 
-use downcast_rs::{impl_downcast, DowncastSync};
 use core::any::Any;
+use downcast_rs::{impl_downcast, DowncastSync};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeviceType {
@@ -24,7 +24,9 @@ pub trait Driver: DowncastSync + Send + Sync {
 
     /// Attempts to convert this driver object into an Arc<dyn BlockDriver>.
     /// Implementers should override this. Block drivers return Some(self), others None.
-    fn try_get_block_driver(self: alloc::sync::Arc<Self>) -> Option<alloc::sync::Arc<dyn BlockDriver>>;
+    fn try_get_block_driver(
+        self: alloc::sync::Arc<Self>,
+    ) -> Option<alloc::sync::Arc<dyn BlockDriver>>;
 }
 impl_downcast!(sync Driver);
 

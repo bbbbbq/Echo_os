@@ -1,13 +1,16 @@
-use core::task::{Context, Poll};
 use core::future::Future;
+use core::task::{Context, Poll};
 
+use crate::{
+    id::TaskId,
+    kernel_task::KernelTask,
+    task_def::{Task, TaskTrait},
+    waker::Waker,
+};
+use alloc::boxed::Box;
 use alloc::{collections::VecDeque, vec::Vec};
 use hashbrown::HashMap;
 use spin::Mutex;
-use alloc::boxed::Box;
-use crate::{
-    id::TaskId, kernel_task::KernelTask, task_def::{Task, TaskTrait}, waker::Waker
-};
 
 use alloc::sync::Arc;
 use lazy_static::*;
@@ -21,19 +24,14 @@ lazy_static! {
         Mutex::new(HashMap::new());
 }
 
-
-lazy_static!
-{
-    pub static ref GLOBLE_EXECUTOR:Executor = Executor::new();
+lazy_static! {
+    pub static ref GLOBLE_EXECUTOR: Executor = Executor::new();
 }
 
-pub fn get_task_by_id(id: TaskId) -> Option<Arc<dyn TaskTrait>>
-{
+pub fn get_task_by_id(id: TaskId) -> Option<Arc<dyn TaskTrait>> {
     let task_queue = TASK_QUEUE.lock();
-    for task_option in task_queue.iter()
-    {
-        if let Some(task_ref) = task_option
-        {
+    for task_option in task_queue.iter() {
+        if let Some(task_ref) = task_option {
             if task_ref.task_inner.get_task_id() == id {
                 return Some(task_ref.task_inner.clone());
             }
@@ -82,10 +80,8 @@ impl Executor {
     }
 }
 
-
-pub fn get_cur_task()->Option<Arc<dyn TaskTrait>>
-{
-    GLOBLE_EXECUTOR.cur_task[0].lock().clone()    
+pub fn get_cur_task() -> Option<Arc<dyn TaskTrait>> {
+    GLOBLE_EXECUTOR.cur_task[0].lock().clone()
 }
 
 pub fn spawn(task: Task, future: impl Future<Output = ()> + Send + Sync + 'static) {
@@ -102,7 +98,6 @@ pub fn spawn(task: Task, future: impl Future<Output = ()> + Send + Sync + 'stati
     TASK_HASH_MAP.lock().insert(task_id, task_inner_arc); // 将 task_inner 存入哈希表
 }
 
-
 pub fn spawn_kernel_task(future: impl Future<Output = ()> + Send + Sync + 'static) {
     let kernel_task_obj = KernelTask::new();
     let kernel_task_arc: Arc<dyn TaskTrait> = Arc::new(kernel_task_obj);
@@ -111,5 +106,7 @@ pub fn spawn_kernel_task(future: impl Future<Output = ()> + Send + Sync + 'stati
         task_inner: kernel_task_arc.clone(),
         task_future: Box::pin(future),
     }));
-    TASK_HASH_MAP.lock().insert(kernel_task_arc.get_task_id(), kernel_task_arc.clone());
+    TASK_HASH_MAP
+        .lock()
+        .insert(kernel_task_arc.get_task_id(), kernel_task_arc.clone());
 }

@@ -4,18 +4,20 @@ use alloc::vec;
 use console::println;
 use core::panic::PanicInfo;
 use device::init_dt;
-use filesystem::init_fs;
 use filesystem::file::File;
+use filesystem::init_fs;
 use filesystem::path::Path;
 use filesystem::vfs::OpenFlags;
 use heap;
- // Changed to get_block_device
- // define module removed
- // define module removed
+// Changed to get_block_device
+// define module removed
+// define module removed
 use log::{error, info};
 extern crate alloc;
 use crate::alloc::string::ToString;
 use boot;
+use elf_ext::load_elf_frame;
+
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     if let Some(location) = info.location() {
@@ -31,8 +33,6 @@ fn panic(info: &PanicInfo) -> ! {
     loop {}
 }
 
-
-
 #[unsafe(no_mangle)]
 pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     console::init();
@@ -41,10 +41,11 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
 
     init_dt(dtb);
     init_fs();
-    
+
     info!("kernel_end");
     // test_file();
     // test_thread();
+    load_elf_frame(Path::new("/test/hello".to_string()));
     arch::os_shut_down();
     loop {}
 }
@@ -63,7 +64,9 @@ pub fn test_file() {
                     if bytes_read > 0 {
                         // Attempt to convert the read bytes to a UTF-8 string
                         match core::str::from_utf8(&buffer[..bytes_read]) {
-                            Ok(s) => info!("Content of /hello.txt: \"{}\"", s.trim_end_matches('\0')),
+                            Ok(s) => {
+                                info!("Content of /hello.txt: \"{}\"", s.trim_end_matches('\0'))
+                            }
                             Err(_) => error!("Content of /hello.txt is not valid UTF-8"),
                         }
                     } else {
@@ -76,7 +79,8 @@ pub fn test_file() {
             // Test get_file_size for /hello.txt
             match _file.get_file_size() {
                 Ok(size) => {
-                    if size == 48 { // Expected size for hello.txt
+                    if size == 48 {
+                        // Expected size for hello.txt
                         info!("/hello.txt get_file_size returned {} as expected.", size);
                     } else {
                         error!("/hello.txt get_file_size returned {}, expected 48.", size);

@@ -1,5 +1,5 @@
 use core::ptr::NonNull;
-use frame::{alloc_continues, alloc_frame, dealloc_continues, dealloc_frame, FrameTracer};
+use frame::{FrameTracer, alloc_continues, alloc_frame, dealloc_continues, dealloc_frame};
 use spin::Mutex;
 extern crate alloc;
 use alloc::vec::Vec;

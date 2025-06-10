@@ -9,3 +9,6 @@ mem = { workspace = true }
 filesystem = { workspace = true }
 trap = { workspace = true }
 spin = { workspace = true }
+lazy_static = { workspace = true, features = ["spin_no_std"] }
+elf_ext = { workspace = true }
+

@@ -1,10 +1,10 @@
+use crate::path::Path;
+use crate::vfs::{FileSystem, Inode};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use crate::path::Path;
-use crate::vfs::{Inode, FileSystem};
-use spin::Mutex;
-use log::trace;
 use lazy_static::lazy_static;
+use log::trace;
+use spin::Mutex;
 
 lazy_static! {
     pub static ref MOUNT_LIST: Mutex<Vec<(Path, MountNode)>> = Mutex::new(Vec::new());
@@ -12,25 +12,23 @@ lazy_static! {
 #[derive(Clone)]
 pub struct MountNode {
     pub root_inner: Arc<dyn Inode>,
-    pub fs: Arc<dyn FileSystem>
+    pub fs: Arc<dyn FileSystem>,
 }
 
 impl MountNode {
     pub fn new(fs: Arc<dyn FileSystem>, root: Arc<dyn Inode>) -> Self {
         MountNode {
             root_inner: root,
-            fs: fs
+            fs: fs,
         }
     }
 
-    pub fn get_inode(&self) -> Arc<dyn Inode>
-    {
+    pub fn get_inode(&self) -> Arc<dyn Inode> {
         self.root_inner.clone()
     }
 }
 
-pub fn mount_fs(fs: Arc<dyn FileSystem>, path: Path) 
-{
+pub fn mount_fs(fs: Arc<dyn FileSystem>, path: Path) {
     trace!("Mounting filesystem at path: {:?}", path);
     if let Some(root) = fs.root_inode() {
         let mount_node = MountNode::new(fs, root);
@@ -69,9 +67,12 @@ pub fn get_mount_node(path: Path) -> Option<(Path, MountNode)> {
 
             let is_exact_match = input_path_str.len() == current_prefix_len;
             let is_prefix_and_subdir = if !is_exact_match {
-                input_path_str.as_bytes().get(current_prefix_len).map_or(false, |&c| c == b'/')
+                input_path_str
+                    .as_bytes()
+                    .get(current_prefix_len)
+                    .map_or(false, |&c| c == b'/')
             } else {
-                false 
+                false
             };
             let valid_match_as_prefix = if mount_point_str == "/" {
                 true

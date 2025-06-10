@@ -1,5 +1,5 @@
-use crate::vfs::{FileType, VfsError, Inode, DirEntry, FileSystem, VfsResult, FileAttr};
 use crate::path::Path; // Alias if Path is ambiguous with vfs::Path
+use crate::vfs::{DirEntry, FileAttr, FileSystem, FileType, Inode, VfsError, VfsResult};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 

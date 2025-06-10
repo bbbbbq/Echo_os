@@ -1,4 +1,4 @@
-use sbi_rt::{system_reset, NoReason, Shutdown};
+use sbi_rt::{NoReason, Shutdown, system_reset};
 pub fn os_shut_down() -> ! {
     system_reset(Shutdown, NoReason);
     unreachable!()

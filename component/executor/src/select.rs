@@ -1,13 +1,13 @@
-use core::{pin::Pin, task::{Context, Poll}};
+use core::{
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 use alloc::boxed::Box;
-
 
 pub struct Select<A, B> {
     inner: Option<(A, B)>,
 }
-
-
 
 impl<A: Unpin, B: Unpin> Unpin for Select<A, B> {}
 

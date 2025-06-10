@@ -1,7 +1,6 @@
-use alloc::sync::Arc;
 use crate::file::File;
 use alloc::collections::BTreeMap;
-
+use alloc::sync::Arc;
 
 pub struct FdTable {
     pub table: BTreeMap<usize, File>,
@@ -11,9 +10,27 @@ impl FdTable {
     pub fn new() -> Self {
         let mut table = BTreeMap::new();
         // 前三个文件描述符是输入流、输出流、错误流
-        table.insert(0, File::new(Arc::new(crate::devfs::uart::UartDev::new()), crate::vfs::OpenFlags::O_RDONLY)); // stdin
-        table.insert(1, File::new(Arc::new(crate::devfs::uart::UartDev::new()), crate::vfs::OpenFlags::O_WRONLY)); // stdout
-        table.insert(2, File::new(Arc::new(crate::devfs::uart::UartDev::new()), crate::vfs::OpenFlags::O_WRONLY)); // stderr
+        table.insert(
+            0,
+            File::new(
+                Arc::new(crate::devfs::uart::UartDev::new()),
+                crate::vfs::OpenFlags::O_RDONLY,
+            ),
+        ); // stdin
+        table.insert(
+            1,
+            File::new(
+                Arc::new(crate::devfs::uart::UartDev::new()),
+                crate::vfs::OpenFlags::O_WRONLY,
+            ),
+        ); // stdout
+        table.insert(
+            2,
+            File::new(
+                Arc::new(crate::devfs::uart::UartDev::new()),
+                crate::vfs::OpenFlags::O_WRONLY,
+            ),
+        ); // stderr
         Self { table }
     }
 
