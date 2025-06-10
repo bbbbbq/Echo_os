@@ -1,10 +1,10 @@
 #![no_std]
 
 extern crate alloc;
-
+use log::debug;
 use alloc::vec::Vec;
 use bitmap::Bitmap;
-use config::target::plat::{FRAME_SIZE, PAGE_SIZE};
+use config::target::plat::{FRAME_SIZE, PAGE_SIZE,VIRT_ADDR_START};
 use lazy_static::lazy_static;
 use memory_addr::MemoryAddr;
 use memory_addr::PhysAddr;
@@ -15,10 +15,17 @@ unsafe extern "C" {
 
 lazy_static! {
     pub static ref FRAME_ALLOCATOR: Mutex<FrameAllocator> = {
-        let start_addr = _end as usize;
-        let end_addr = start_addr + FRAME_SIZE;
+        let mut start_addr = _end as usize;
+        let mut end_addr = start_addr + FRAME_SIZE;
         let start_paddr = PhysAddr::from_usize(start_addr);
         let end_paddr = PhysAddr::from_usize(end_addr);
+        // if start_addr >= VIRT_ADDR_START {
+        //     start_addr -= VIRT_ADDR_START;
+        // }
+        // if end_addr >= VIRT_ADDR_START {
+        //     end_addr -= VIRT_ADDR_START;
+        // }
+        debug!("Allocated frame at address: 0x{:x}", start_addr);
         Mutex::new(FrameAllocator::new(start_paddr, end_paddr))
     };
 }
@@ -74,6 +81,7 @@ impl FrameAllocator {
         let frame_idx = (frame.paddr.as_usize() - self.start.as_usize()) / PAGE_SIZE;
         self.bitmap.clear(frame_idx);
     }
+
     pub fn alloc_continues(&mut self, count: usize) -> Vec<FrameTracer> {
         let mut frames = Vec::with_capacity(count);
         let mut start_idx = 0;

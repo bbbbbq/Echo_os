@@ -44,9 +44,15 @@ impl PageTable
         ).expect("Failed to map region in page table");
     }
 
-    pub fn map_mem_set(&mut self, mem_set: MemSet) {
+    pub fn map_mem_set_frame(&mut self, mem_set: MemSet) {
         for region in mem_set.regions.into_iter() {
             self.map_region_user_frame(region);
+        }
+    }
+
+    pub fn map_mem_set_user(&mut self, mem_set: MemSet) {
+        for region in mem_set.regions.into_iter() {
+            self.map_region_user(region);
         }
     }
 
@@ -55,7 +61,7 @@ impl PageTable
         change_pagetable(self.page_table.root_paddr().as_usize())
     }
 
-    pub fn map_region_user(&mut self, region: MemRegion)
+    pub fn map_region_user(&mut self, mut region: MemRegion)
     {
         if let Some(paddr_range) = region.paddr_range {
             let start_vaddr = region.vaddr_range.start;
@@ -73,12 +79,28 @@ impl PageTable
                 true,
                 true
             ).expect("Failed to map region in page table");
+
+            region.is_mapped = true;
         }
     }
 
     pub fn flush()
     {
         flush();
+    }
+    pub fn translate(&self, vaddr: VirtAddr) -> Option<PhysAddr> {
+        match self.page_table.query(vaddr) {
+            Ok((paddr, flags, page_size)) => {
+                let is_readable_writable = flags.contains(MappingFlags::READ | MappingFlags::WRITE);
+                let is_4k_page = matches!(page_size, page_table_multiarch::PageSize::Size4K);
+                if is_readable_writable && is_4k_page {
+                    Some(paddr)
+                } else {
+                    None
+                }
+            },
+            Err(_) => None
+        }
     }
 }
 

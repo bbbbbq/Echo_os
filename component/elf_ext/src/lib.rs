@@ -25,6 +25,7 @@ impl ElfExt for ElfFile<'_> {
     }
 }
 
+#[derive(Clone)]
 pub struct LoadElfReturn {
     pub frame_addr: usize,
     pub file_size: usize,
@@ -105,14 +106,29 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
         let start_va = va.align_down(PAGE_SIZE);
         let end_va = VirtAddr::from(va.as_usize() + mem_size).align_up(PAGE_SIZE);
 
-                let region_type = if ph.flags().is_execute() {
+        let region_type = if ph.flags().is_execute() {
             MemRegionType::Text
         } else if ph.flags().is_write() {
             MemRegionType::DATA
         } else {
             MemRegionType::RODATA
         };
-        let region = MemRegion::new_anonymous(start_va, end_va, flags, "elf_segment".to_string(), region_type);
+
+        let paddr_start = PhysAddr::from_usize((frame_addr as u64 + ph.offset()) as usize)
+            .align_down(PAGE_SIZE);
+        let paddr_end = PhysAddr::from(
+            paddr_start.as_usize() + (end_va.as_usize() - start_va.as_usize()),
+        );
+
+        let region = MemRegion::new_mapped(
+            start_va,
+            end_va,
+            paddr_start,
+            paddr_end,
+            flags,
+            "elf_segment".to_string(),
+            region_type,
+        );
         memset.push_region(region);
     }
 
@@ -121,9 +137,16 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
     let stack_bottom = VirtAddr::from(
         config::target::plat::USER_STACK_TOP - config::target::plat::USER_STACK_INIT_SIZE,
     );
-        let stack_region = MemRegion::new_anonymous(
+    let stack_size = config::target::plat::USER_STACK_INIT_SIZE;
+    let stack_pages = stack_size.div_ceil(PAGE_SIZE);
+    let stack_paddr_start = alloc_continues(stack_pages)[0].paddr;
+    let stack_paddr_end = PhysAddr::from(stack_paddr_start.as_usize() + stack_size);
+
+    let stack_region = MemRegion::new_mapped(
         stack_bottom,
         stack_top,
+        stack_paddr_start,
+        stack_paddr_end,
         MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE,
         "user_stack".to_string(),
         MemRegionType::STACK,
@@ -142,9 +165,16 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
 
     let heap_start_addr: VirtAddr = heap_bottom.into();
     let heap_end_addr = heap_start_addr.add(PAGE_SIZE);
-        let heap_region = MemRegion::new_anonymous(
+    let heap_size = PAGE_SIZE; // Default heap size
+    let heap_pages = heap_size.div_ceil(PAGE_SIZE);
+    let heap_paddr_start = alloc_continues(heap_pages)[0].paddr;
+    let heap_paddr_end = PhysAddr::from(heap_paddr_start.as_usize() + heap_size);
+
+    let heap_region = MemRegion::new_mapped(
         heap_start_addr,
         heap_end_addr,
+        heap_paddr_start,
+        heap_paddr_end,
         MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE,
         "user_heap".to_string(),
         MemRegionType::HEAP,

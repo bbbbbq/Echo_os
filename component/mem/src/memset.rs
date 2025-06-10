@@ -1,7 +1,7 @@
 use super::memregion::MemRegion;
 use alloc::vec::Vec;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MemSet {
     pub regions: Vec<MemRegion>,
 }

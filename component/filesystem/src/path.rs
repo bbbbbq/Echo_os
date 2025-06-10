@@ -1,7 +1,7 @@
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Path {
     inner: Vec<String>,
 }

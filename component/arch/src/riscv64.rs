@@ -27,3 +27,14 @@ pub fn flush() {
         riscv::asm::sfence_vma_all();
     }
 }
+
+
+pub fn get_cpu_num() -> usize {
+    // TODO: This should be initialized from the device tree at boot time.
+    const CPU_NUM: usize = 1;
+    CPU_NUM
+}
+
+pub fn get_cur_cpu_id() -> usize {
+    riscv::register::mhartid::read()
+}

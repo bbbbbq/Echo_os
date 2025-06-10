@@ -16,7 +16,7 @@ use log::{error, info};
 extern crate alloc;
 use crate::alloc::string::ToString;
 use boot;
-use elf_ext::load_elf_frame;
+use task::cache::load_elf_cache;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -45,8 +45,12 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     info!("kernel_end");
     // test_file();
     // test_thread();
-    let elf_info = load_elf_frame(Path::new("/busybox".to_string()));
-    info!("elf_info: {:#?}", elf_info);
+    // let elf_info = load_elf_cache(Path::new("/busybox".to_string()));
+    // info!("elf_info: {:#?}", elf_info);
+
+    task::init();
+
+    task::run_tasks();
     arch::os_shut_down();
     loop {}
 }

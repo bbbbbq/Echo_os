@@ -3,7 +3,7 @@ use memory_addr::{MemoryAddr, PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange};
 use page_table_multiarch::MappingFlags;
 
 
-#[derive(Debug)]
+#[derive(Debug,Clone, Copy)]
 pub enum MemRegionType {
     Text,
     BSS,
@@ -14,14 +14,15 @@ pub enum MemRegionType {
     ANONYMOUS,
 }
 
-
-#[derive(Debug)]
+/// Memory region
+#[derive(Clone, Debug)]
 pub struct MemRegion {
     pub vaddr_range: VirtAddrRange,
     pub paddr_range: Option<PhysAddrRange>,
     pub pte_flags: MappingFlags,
     pub name: String,
     pub region_type: MemRegionType,
+    pub is_mapped: bool,
 }
 
 impl MemRegion {
@@ -51,6 +52,7 @@ impl MemRegion {
             pte_flags,
             name,
             region_type,
+            is_mapped: false,
         }
     }
 
@@ -70,6 +72,7 @@ impl MemRegion {
             pte_flags,
             name,
             region_type,
+            is_mapped: false,
         }
     }
 }

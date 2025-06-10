@@ -10,6 +10,7 @@ pub mod select;
 pub mod task_def;
 pub mod waker;
 
+pub use executor::*;
 pub enum TaskType {
     Kernel,
     Thread,

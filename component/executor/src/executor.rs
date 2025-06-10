@@ -11,7 +11,7 @@ use alloc::boxed::Box;
 use alloc::{collections::VecDeque, vec::Vec};
 use hashbrown::HashMap;
 use spin::Mutex;
-
+use alloc::vec;
 use alloc::sync::Arc;
 use lazy_static::*;
 
@@ -25,7 +25,7 @@ lazy_static! {
 }
 
 lazy_static! {
-    pub static ref GLOBLE_EXECUTOR: Executor = Executor::new();
+    pub static ref GLOBLE_EXECUTOR: Mutex<Executor> = Mutex::new(Executor::new());
 }
 
 pub fn get_task_by_id(id: TaskId) -> Option<Arc<dyn TaskTrait>> {
@@ -46,8 +46,9 @@ pub struct Executor {
 
 impl Executor {
     pub fn new() -> Self {
+        let cpu_num = arch::get_cpu_num();
         Self {
-            cur_task: Vec::new(),
+            cur_task: (0..cpu_num).map(|_| Mutex::new(None)).collect(),
         }
     }
 
@@ -81,7 +82,7 @@ impl Executor {
 }
 
 pub fn get_cur_task() -> Option<Arc<dyn TaskTrait>> {
-    GLOBLE_EXECUTOR.cur_task[0].lock().clone()
+    GLOBLE_EXECUTOR.lock().cur_task[0].lock().clone()
 }
 
 pub fn spawn(task: Task, future: impl Future<Output = ()> + Send + Sync + 'static) {
@@ -109,4 +110,10 @@ pub fn spawn_kernel_task(future: impl Future<Output = ()> + Send + Sync + 'stati
     TASK_HASH_MAP
         .lock()
         .insert(kernel_task_arc.get_task_id(), kernel_task_arc.clone());
+}
+
+
+pub fn run_task()
+{
+    GLOBLE_EXECUTOR.lock().run();
 }
