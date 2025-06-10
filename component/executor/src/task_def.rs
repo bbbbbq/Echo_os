@@ -5,8 +5,8 @@ use downcast_rs::{DowncastSync, impl_downcast};
 
 use super::id::TaskId;
 use crate::{ExitCode, TaskType};
-
-pub trait TaskTrait: Send + Sync + DowncastSync {
+use core::fmt::Debug;
+pub trait TaskTrait: Send + Sync + DowncastSync + Debug {
     fn get_task_id(&self) -> TaskId;
 
     fn get_task_type(&self) -> TaskType;

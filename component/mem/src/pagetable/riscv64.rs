@@ -47,15 +47,10 @@ impl PageTable
         }
     }
 
-    // pub fn restore(&self)
-    // {
-    //     unsafe extern "C"
-    //     {
-    //         fn boot_page_table();
-    //     }
-    //     let vaddr = VirtAddr::from_usize(boot_page_table as usize);
-    //     self.page_table.copy_from(&vaddr, vaddr, PAGE_SIZE);
-    // }
+    pub fn restore(&mut self)
+    {
+       self.page_table = Sv39PageTable::new_from_addr(self.page_table.root_paddr());
+    }
 
     pub fn map_region_user_frame(&mut self, area: MemRegion) {
         let start_vaddr = area.vaddr_range.start;

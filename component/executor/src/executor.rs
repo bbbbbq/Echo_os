@@ -15,6 +15,7 @@ use alloc::vec;
 use alloc::sync::Arc;
 use lazy_static::*;
 
+
 lazy_static! {
     pub static ref TASK_QUEUE: Mutex<VecDeque<Option<Task>>> = Mutex::new(VecDeque::new());
 }
@@ -85,8 +86,10 @@ pub fn get_cur_task() -> Option<Arc<dyn TaskTrait>> {
     GLOBLE_EXECUTOR.lock().cur_task[0].lock().clone()
 }
 
+
+
 pub fn spawn(task: Task, future: impl Future<Output = ()> + Send + Sync + 'static) {
-    let task_inner_arc = task.task_inner; // 从传入的 task 中获取 task_inner
+    let task_inner_arc: Arc<dyn TaskTrait + 'static> = task.task_inner; // 从传入的 task 中获取 task_inner
     let task_id = task_inner_arc.get_task_id();
 
     // 创建一个新的 Task 实例，使用传入的 future

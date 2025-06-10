@@ -4,7 +4,7 @@ use crate::{
 };
 
 use super::task_def::TaskTrait;
-
+#[derive(Debug)]
 pub struct KernelTask {
     kernel_task_id: TaskId,
 }

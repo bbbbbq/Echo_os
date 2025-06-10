@@ -11,12 +11,18 @@ use mem::memset::MemSet;
 use mem::pagetable::PageTable;
 use spin::RwLock;
 use trap::trapframe::TrapFrame;
-
-use alloc::string::String;
+use executor::get_cur_task;
+use alloc::string::{String, ToString};
 use async_recursion::async_recursion;
 use alloc::boxed::Box;
 use crate::cache::{find_task_cache, load_elf_cache};
+use core::future::Future;
+use core::pin::Pin;
+use core::task::{Context, Poll};
+use executor::task_def::Task;
 use filesystem::path::Path;
+use crate::alloc::borrow::ToOwned;
+
 
 pub struct ProcessControlBlock {
     pub pagetable: PageTable,
@@ -31,6 +37,21 @@ pub struct ProcessControlBlock {
     pub heap_bottom: usize,
 }
 
+impl core::fmt::Debug for ProcessControlBlock {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("ProcessControlBlock")
+            .field("pro_id", &self.pro_id)
+            .field("cwd", &self.cwd)
+            .field("entry", &self.entry)
+            .field("children_count", &self.children.len())
+            .field("threads_count", &self.threads.len())
+            .field("exit_code", &self.exit_code)
+            .field("heap_bottom", &self.heap_bottom)
+            .finish()
+    }
+}
+
+#[derive(Debug)]
 pub struct ThreadControlBlock {
     pub context: TrapFrame,
     pub stack_top: usize,
@@ -38,10 +59,20 @@ pub struct ThreadControlBlock {
     pub thread_exit_code: u64,
 }
 
+#[derive(Clone)]
 pub struct UserTask {
-    pub pcb: RwLock<ProcessControlBlock>,
-    pub tcb: RwLock<ThreadControlBlock>,
+    pub pcb: Arc<RwLock<ProcessControlBlock>>,
+    pub tcb: Arc<RwLock<ThreadControlBlock>>,
     pub parent: Arc<Weak<UserTask>>,
+}
+
+impl core::fmt::Debug for UserTask {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("UserTask")
+            .field("tcb", &self.tcb.read())
+            .field("parent_strong_count", &self.parent.strong_count())
+            .finish()
+    }
 }
 
 impl TaskTrait for UserTask {
@@ -74,12 +105,12 @@ impl TaskTrait for UserTask {
 }
 
 impl UserTask {
-    pub fn new(parent: Weak<UserTask>, cur_dir: Path) -> Self {
+    pub fn new(parent: Weak<UserTask>, cur_dir: Path) -> Arc<Self> {
         let thread_id = alloc_task_id();
         let process_id = ProcId::new();
 
-        Self {
-            pcb: RwLock::new(ProcessControlBlock {
+        Arc::new(Self {
+            pcb: Arc::new(RwLock::new(ProcessControlBlock {
                 pro_id: process_id,
                 pagetable: PageTable::new(),
                 mem_set: MemSet::new(),
@@ -90,15 +121,15 @@ impl UserTask {
                 threads: Vec::new(),
                 exit_code: 0,
                 heap_bottom: 0,
-            }),
-            tcb: RwLock::new(ThreadControlBlock {
+            })),
+            tcb: Arc::new(RwLock::new(ThreadControlBlock {
                 thread_id,
                 thread_exit_code: 0,
                 stack_top: 0,
                 context: TrapFrame::new(),
-            }),
+            })),
             parent: Arc::new(parent),
-        }
+        })
     }
 
     pub fn push_stack(&self, data: u64) {
@@ -111,9 +142,12 @@ impl UserTask {
         }
         tcb.context.set_sp(new_sp);
     }
-}
 
-#[async_recursion(Sync)]
+    pub fn force_cx_ref(&self) -> &'static mut TrapFrame {
+        unsafe { &mut self.tcb.as_mut_ptr().as_mut().unwrap().context }
+    }
+}
+#[async_recursion]
 pub async fn exec_with_process(
     path: Path,
     cur_dir: Path,
@@ -126,20 +160,60 @@ pub async fn exec_with_process(
     {
         elf_info = Some(load_elf_cache(path));
     }
-    let elf_info = elf_info.unwrap();
-
-    let task = Arc::new(UserTask::new(Weak::new(), cur_dir.clone()));
-
-    task.pcb.write().entry = elf_info.entry_point;
-    task.pcb.write().pagetable.map_mem_set_user(elf_info.memset.clone());
-    task.pcb.write().mem_set = elf_info.memset;
-    task.pcb.write().heap_bottom = elf_info.heap_bottom;
-    task.pcb.write().cwd = cur_dir;
-    task.tcb.write().stack_top = elf_info.stack_top;
-    task.tcb.write().context.set_sp(elf_info.stack_top);
-    task.tcb.write().context.set_sepc(elf_info.base + elf_info.entry_point);
     
+    if let Some(elf_info) = elf_info {
+        let task = UserTask::new(Weak::new(), cur_dir.clone());
+
+        task.pcb.write().entry = elf_info.entry_point;
+        task.pcb.write().pagetable.restore();
+        task.pcb.write().pagetable.map_mem_set_user(elf_info.memset.clone());
+        task.pcb.write().mem_set = elf_info.memset;
+        task.pcb.write().heap_bottom = elf_info.heap_bottom;
+        task.pcb.write().cwd = cur_dir;
+        task.tcb.write().stack_top = elf_info.stack_top;
+        task.tcb.write().context.set_sp(elf_info.stack_top);
+        task.tcb.write().context.set_sepc(elf_info.base + elf_info.entry_point);
+        Ok(task)
+    }
+    else
+    {
+        Err(TaskError::NotFound)
+    }
+}
+
+pub async fn add_user_task(filename: &str, args: Vec<&str>, envp: Vec<&str>) -> TaskId
+{
+    let user_work_dir = Path::new("/".to_string());
+    let curr_task = get_cur_task().expect("No current task");
+    let task = UserTask::new(Weak::new(), user_work_dir.clone());
+    curr_task.before_run();
+    let task = exec_with_process(
+        Path::new(filename.to_string()),
+        user_work_dir,
+        args.into_iter().map(String::from).collect(),
+        envp.into_iter().map(String::from).collect(),
+    )
+    .await
+    .expect("Failed to add user task");
+    // executor::spawn(task.clone(), user_entry());
+
+    let task_id = task.get_task_id();
+    task_id
+}
 
 
-    Ok(task)
+
+#[inline]
+pub fn current_user_task() -> Arc<UserTask> {
+    get_cur_task()
+        .expect("Not a user task")
+        .downcast_arc::<UserTask>()
+        .expect("Failed to downcast to UserTask")
+}
+
+#[async_recursion]
+pub async fn user_entry() {
+    let task = current_user_task();
+    let cx_ref = unsafe { task.force_cx_ref() };
+    // task.run(cx_ref).await;
 }

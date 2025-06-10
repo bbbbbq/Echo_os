@@ -3,10 +3,23 @@ use uint_allocator::create_uint_allocator;
 
 create_uint_allocator!(TASKID_ALLOCATOR, 0, 0x1000);
 create_uint_allocator!(PROCID_ALLOCATOR, 0, 0x1000);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TaskId(pub usize);
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ProcId(pub usize);
+
+impl core::fmt::Debug for ProcId {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "ProcId({})", self.0)
+    }
+}
+
+impl core::fmt::Debug for TaskId {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "TaskId({})", self.0)
+    }
+}
 
 impl TaskId {
     pub fn new() -> Self {
