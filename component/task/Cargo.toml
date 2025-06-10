@@ -12,3 +12,4 @@ spin = { workspace = true }
 lazy_static = { workspace = true, features = ["spin_no_std"] }
 elf_ext = { workspace = true }
 log = { workspace = true }
+async-recursion = { workspace = true }

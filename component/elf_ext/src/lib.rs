@@ -13,15 +13,66 @@ use memory_addr::{MemoryAddr, PhysAddr, VirtAddr};
 use page_table_multiarch::MappingFlags;
 use xmas_elf::ElfFile;
 use core::ops::Mul;
+use xmas_elf::sections::SectionData;
+use xmas_elf::symbol_table::DynEntry64;
+use xmas_elf::symbol_table::Entry;
+use config::riscv64_qemu::plat::USER_DYN_ADDR;
 
 
 pub trait ElfExt {
-    fn relocated(&self) -> usize;
+    fn relocate(&self, base: usize) -> Result<usize, &str>;
+    fn dynsym(&self) -> Result<&[DynEntry64], &'static str>;
 }
 
 impl ElfExt for ElfFile<'_> {
-    fn relocated(&self) -> usize {
-        todo!()
+    fn dynsym(&self) -> Result<&[DynEntry64], &'static str> {
+        match self
+            .find_section_by_name(".dynsym")
+            .ok_or(".dynsym not found")?
+            .get_data(self)
+            .map_err(|_| "corrupted .dynsym")?
+        {
+            SectionData::DynSymbolTable64(dsym) => Ok(dsym),
+            _ => Err("bad .dynsym"),
+        }
+    }
+
+    fn relocate(&self, base: usize) -> Result<usize, &str> {
+        let data = self
+            .find_section_by_name(".rela.dyn")
+            .ok_or(".rela.dyn not found")?
+            .get_data(self)
+            .map_err(|_| "corrupted .rela.dyn")?;
+        let entries = match data {
+            SectionData::Rela64(entries) => entries,
+            _ => return Err("bad .rela.dyn"),
+        };
+        let dynsym = self.dynsym()?;
+        for entry in entries.iter() {
+            const REL_GOT: u32 = 6;
+            const REL_PLT: u32 = 7;
+            const REL_RELATIVE: u32 = 8;
+            const R_RISCV_64: u32 = 2;
+            const R_RISCV_RELATIVE: u32 = 3;
+            const R_AARCH64_RELATIVE: u32 = 0x403;
+            const R_AARCH64_GLOBAL_DATA: u32 = 0x401;
+
+            match entry.get_type() {
+                REL_GOT | REL_PLT | R_RISCV_64 | R_AARCH64_GLOBAL_DATA => {
+                    let dynsym = &dynsym[entry.get_symbol_table_index() as usize];
+                    if dynsym.shndx() == 0 {
+                        let name = dynsym.get_name(self)?;
+                        panic!("need to find symbol: {:?}", name);
+                    } else {
+                        base + dynsym.value() as usize
+                    };
+                }
+                REL_RELATIVE | R_RISCV_RELATIVE | R_AARCH64_RELATIVE => {}
+                t => unimplemented!("unknown type: {}", t),
+            }
+        }
+        // panic!("STOP");
+        Ok(base)
     }
 }
 
@@ -35,8 +86,9 @@ pub struct LoadElfReturn {
     pub memset: MemSet,
     pub stack_top: usize,
     pub stack_size: usize,
-    pub heap_start: usize,
+    pub heap_bottom: usize,
     pub heap_size: usize,
+    pub base:usize
 }
 
 impl core::fmt::Debug for LoadElfReturn {
@@ -50,7 +102,7 @@ impl core::fmt::Debug for LoadElfReturn {
             .field("memset", &self.memset)
             .field("stack_top", &format_args!("0x{:x}", self.stack_top))
             .field("stack_size", &self.stack_size)
-            .field("heap_start", &format_args!("0x{:x}", self.heap_start))
+            .field("heap_start", &format_args!("0x{:x}", self.heap_bottom))
             .field("heap_size", &self.heap_size)
             .finish()
     }
@@ -182,6 +234,10 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
     memset.push_region(heap_region);
     debug!("Added user heap: {:?} - {:?}", heap_start_addr, heap_end_addr);
 
+    let base = elf.relocate(USER_DYN_ADDR).unwrap_or(0);
+
+
+
     LoadElfReturn {
         frame_addr,
         file_size,
@@ -191,7 +247,8 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
         memset,
         stack_top: stack_top.as_usize(),
         stack_size: config::target::plat::USER_STACK_INIT_SIZE,
-        heap_start: heap_bottom,
-        heap_size: PAGE_SIZE,
+        heap_bottom: heap_start_addr.as_usize(),
+        heap_size: config::target::plat::HEAP_SIZE,
+        base,
     }
 }

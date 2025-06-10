@@ -89,6 +89,16 @@ impl TrapFrame {
     pub fn get_sp(&self) -> usize {
         self.x[2]
     }
+
+    pub fn set_sp(&mut self, sp: usize)
+    {
+        self.x[2] = sp;
+    }
+
+    pub fn set_sepc(&mut self, sepc: usize)
+    {
+        self.sepc = sepc;
+    }
 }
 
 impl Index<TrapFrameArgs> for TrapFrame {

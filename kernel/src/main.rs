@@ -48,8 +48,10 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     // let elf_info = load_elf_cache(Path::new("/busybox".to_string()));
     // info!("elf_info: {:#?}", elf_info);
 
-    task::init();
 
+    let elf_info = load_elf_cache(Path::new("/busybox".to_string()));
+    info!("elf_info: {:#?}", elf_info);
+    task::init();
     task::run_tasks();
     arch::os_shut_down();
     loop {}

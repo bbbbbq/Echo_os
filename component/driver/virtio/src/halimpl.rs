@@ -26,7 +26,7 @@ unsafe impl Hal for HalImpl {
 
         // Convert physical address to usize for virtio
         let phys_addr_val = base_paddr.as_usize();
-        let phys_addr_adjusted = phys_addr_val - VIRT_ADDR_START;
+        let phys_addr_adjusted = phys_addr_val;
 
         // Create a virtual address pointer from the physical address
         let vaddr = NonNull::new(phys_addr_val as *mut u8).unwrap();

@@ -1,14 +1,39 @@
-
 use config::target::plat::PAGE_SIZE;
 use crate::memset::MemSet;
-use page_table_multiarch::riscv::Sv39PageTable;
-use page_table_multiarch::{MappingFlags, PagingHandler, PageSize};
+use page_table_multiarch::{MappingFlags, PagingHandler, riscv::Sv39PageTable};
 use memory_addr::{MemoryAddr, PhysAddr, VirtAddr};
 use frame::alloc_continues;
 use crate::memregion::MemRegion;
 use crate::pag_hal;
 use arch::change_pagetable;
 use arch::flush;
+
+
+
+
+pub trait PageTableExt
+{
+    fn new_from_addr(addr: PhysAddr) -> Self;
+}
+
+impl PageTableExt for Sv39PageTable<pag_hal::PagingHandlerImpl>
+{
+    fn new_from_addr(addr: PhysAddr) -> Self {
+        #[repr(C)]
+        struct TempPageTable {
+            root_paddr: PhysAddr,
+            _phantom: core::marker::PhantomData<()>,
+        }
+
+        let temp_table = TempPageTable {
+            root_paddr: addr,
+            _phantom: core::marker::PhantomData,
+        };
+
+        unsafe { core::mem::transmute(temp_table) }
+    }
+}
+
 pub struct PageTable
 {
     page_table: Sv39PageTable<pag_hal::PagingHandlerImpl>,
@@ -21,6 +46,16 @@ impl PageTable
             page_table: Sv39PageTable::try_new().expect("Failed to create Sv39PageTable"),
         }
     }
+
+    // pub fn restore(&self)
+    // {
+    //     unsafe extern "C"
+    //     {
+    //         fn boot_page_table();
+    //     }
+    //     let vaddr = VirtAddr::from_usize(boot_page_table as usize);
+    //     self.page_table.copy_from(&vaddr, vaddr, PAGE_SIZE);
+    // }
 
     pub fn map_region_user_frame(&mut self, area: MemRegion) {
         let start_vaddr = area.vaddr_range.start;
