@@ -2,7 +2,7 @@
 //!
 //!
 
-use super::trapframe::TrapFrame;
+pub use super::trapframe::TrapFrame;
 
 #[derive(Debug, Clone, Copy)]
 pub enum TrapType {
@@ -42,7 +42,7 @@ unsafe extern "Rust" {
 }
 
 #[cfg(target_arch = "riscv64")]
-mod riscv64;
+pub mod riscv64;
 #[cfg(target_arch = "riscv64")]
 #[allow(unused_imports)]
 pub use riscv64::*;

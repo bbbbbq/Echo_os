@@ -1,8 +1,7 @@
 [workspace]
 members = [ "component/UintAllocator", "component/bitmap", "component/boot", "component/config", 
     "component/console", "component/driver/device", "component/driver/virtio", "component/driver/api", "component/filesystem", "component/frame", 
-    "component/heap", "kernel", "component/arch", "component/mem", "component/executor" , "component/trap", "component/timer", "component/task"
-, "component/elf_ext"]
+    "component/heap", "kernel", "component/arch", "component/mem" , "component/trap", "component/timer", "component/elf_ext"]
 resolver = "2"
 
 
@@ -32,8 +31,6 @@ sync = "0.1.0"
 mem = { path = "component/mem" }
 xmas-elf = "0.7"
 hashbrown = "0.15.2"
-executor = { path = "component/executor" }
 trap = {path = "component/trap"}
 elf_ext = { path = "component/elf_ext"}
-task = { path = "component/task" }
 async-recursion = "1.1.0"

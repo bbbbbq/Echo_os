@@ -14,9 +14,9 @@ use heap;
 // define module removed
 use log::{error, info};
 extern crate alloc;
+pub mod executor;
 use crate::alloc::string::ToString;
 use boot;
-use task::cache::load_elf_cache;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -38,21 +38,11 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     console::init();
     println!("hart_id : {:x} dtb: {:x}", hartid, dtb);
     heap::init();
-
+    trap::trap::init();
     init_dt(dtb);
     init_fs();
 
     info!("kernel_end");
-    // test_file();
-    // test_thread();
-    // let elf_info = load_elf_cache(Path::new("/busybox".to_string()));
-    // info!("elf_info: {:#?}", elf_info);
-
-
-    let elf_info = load_elf_cache(Path::new("/busybox".to_string()));
-    info!("elf_info: {:#?}", elf_info);
-    task::init();
-    task::run_tasks();
     arch::os_shut_down();
     loop {}
 }

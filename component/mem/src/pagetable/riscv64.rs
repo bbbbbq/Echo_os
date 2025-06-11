@@ -7,6 +7,18 @@ use crate::memregion::MemRegion;
 use crate::pag_hal;
 use arch::change_pagetable;
 use arch::flush;
+use lazy_static::lazy_static;
+
+unsafe extern "C"
+{
+    pub unsafe fn boot_page_table() -> PhysAddr;
+}
+
+
+lazy_static! {
+    pub static ref BOOT_PAGE_TABLE: PageTable = PageTable::new_from_addr(unsafe { boot_page_table() });
+}
+
 
 
 
@@ -44,6 +56,12 @@ impl PageTable
     pub fn new() -> Self {
         Self {
             page_table: Sv39PageTable::try_new().expect("Failed to create Sv39PageTable"),
+        }
+    }
+
+    pub fn new_from_addr(addr: PhysAddr) -> Self {
+        Self {
+            page_table: Sv39PageTable::new_from_addr(addr),
         }
     }
 

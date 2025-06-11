@@ -38,6 +38,19 @@ impl Path {
     }
 }
 
+impl From<&str> for Path {
+    fn from(s: &str) -> Self {
+        Path::new(s.to_string())
+    }
+}
+
+impl From<String> for Path {
+    fn from(s: String) -> Self {
+        Path::new(s)
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;

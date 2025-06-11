@@ -21,4 +21,4 @@ device = { workspace = true }
 filesystem = { workspace = true }
 arch = { workspace = true }
 elf_ext = { workspace = true }
-task = { workspace = true }
+trap = { workspace = true }

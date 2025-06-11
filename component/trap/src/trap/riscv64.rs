@@ -14,7 +14,7 @@ use riscv::{
 };
 
 // Initialize the trap handler.
-pub(crate) fn init() {
+pub fn init() {
     unsafe {
         let mut stvec = Stvec::from_bits(0);
         stvec.set_address(kernelvec as usize);

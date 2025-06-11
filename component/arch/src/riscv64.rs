@@ -1,4 +1,5 @@
-use sbi_rt::{NoReason, Shutdown, system_reset};
+use sbi_rt::{system_reset, NoReason, Shutdown};
+
 pub fn os_shut_down() -> ! {
     system_reset(Shutdown, NoReason);
     unreachable!()
@@ -37,4 +38,10 @@ pub fn get_cpu_num() -> usize {
 
 pub fn get_cur_cpu_id() -> usize {
     riscv::register::mhartid::read()
+}
+
+pub fn wait_for_interrupt() {
+    unsafe {
+        riscv::asm::wfi();
+    }
 }

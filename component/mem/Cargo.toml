@@ -16,3 +16,4 @@ config = { workspace = true }
 cfg-if = { workspace = true }
 frame = { workspace = true }
 arch = { workspace = true }
+lazy_static = { workspace = true }
