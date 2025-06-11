@@ -9,6 +9,8 @@ use frame::alloc_continues;
 use lazy_static::lazy_static;
 use memory_addr::{MemoryAddr, PhysAddr, VirtAddr};
 use page_table_multiarch::{MappingFlags, PagingHandler, riscv::Sv39PageTable};
+use log::error;
+
 
 unsafe extern "C" {
     fn boot_page_table() -> usize;
@@ -30,13 +32,12 @@ impl Clone for PageTable {
 }
 
 impl PageTable {
-    
+
     pub fn new() -> Self {
         Self {
             page_table: Sv39PageTable::try_new().expect("Failed to create Sv39PageTable"),
         }
     }
-
 
     pub fn new_from_addr(addr: PhysAddr) -> Self {
         #[repr(C)]
@@ -75,7 +76,7 @@ impl PageTable {
     }
 
 
-    pub fn map_region_user_frame(&mut self, area: MemRegion) {
+    pub fn map_region_user_frame(&mut self, area: &mut MemRegion) {
         let start_vaddr = area.vaddr_range.start;
         let size = area.vaddr_range.size();
         if PAGE_SIZE == 0 {
@@ -91,19 +92,20 @@ impl PageTable {
             .page_table
             .map_region(start_vaddr, get_paddr, size, area.pte_flags, true, true)
             .expect("Failed to map region in page table");
+        area.is_mapped = true;
     }
 
 
     pub fn map_mem_set_frame(&mut self, mem_set: MemSet) {
-        for region in mem_set.regions.into_iter() {
-            self.map_region_user_frame(region);
+        for mut region in mem_set.regions.into_iter() {
+            self.map_region_user_frame(&mut region);
         }
     }
 
 
     pub fn map_mem_set_user(&mut self, mem_set: MemSet) {
-        for region in mem_set.regions.into_iter() {
-            self.map_region_user(region);
+        for mut region in mem_set.regions.into_iter() {
+            self.map_region_user(&mut region);
         }
     }
 
@@ -113,7 +115,7 @@ impl PageTable {
     }
 
 
-    pub fn map_region_user(&mut self, mut region: MemRegion) {
+    pub fn map_region_user(&mut self, region: &mut MemRegion) {
         if let Some(paddr_range) = region.paddr_range {
             let start_vaddr = region.vaddr_range.start;
             let size = region.vaddr_range.size();
@@ -128,6 +130,8 @@ impl PageTable {
                 .expect("Failed to map region in page table");
 
             region.is_mapped = true;
+        } else {
+            error!("Failed to map region in page table");
         }
     }
 

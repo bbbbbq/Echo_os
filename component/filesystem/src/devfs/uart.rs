@@ -4,6 +4,7 @@ use crate::vfs::{DirEntry, FileAttr, FileSystem, FileType, Inode, VfsError};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use console::print;
+#[derive(Debug)]
 pub struct UartDev {
     file_type: FileType,
 }

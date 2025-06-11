@@ -46,6 +46,7 @@ pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
     panic!("Heap allocation error, layout = {:?}", layout)
 }
 
+#[derive(Debug)]
 pub struct HeapUser {
     virt_range: VirtAddrRange,
 }

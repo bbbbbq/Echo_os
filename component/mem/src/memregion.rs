@@ -104,7 +104,7 @@ impl MemRegion {
         }
     }
     pub fn map_user_frame(&mut self, page_table: &mut PageTable) {
-        page_table.map_region_user_frame(self.clone());
+        page_table.map_region_user_frame(self);
     }
 }
 

@@ -3,6 +3,7 @@ use crate::vfs::{DirEntry, FileAttr, FileSystem, FileType, Inode, VfsError, VfsR
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
+#[derive(Debug)]
 pub struct ZeroDev;
 
 impl ZeroDev {

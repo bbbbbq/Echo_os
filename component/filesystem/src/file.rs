@@ -7,6 +7,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 #[derive(Clone)]
+#[derive(Debug)]
 pub struct File {
     pub inner: Arc<dyn Inode>,
     pub openflags: OpenFlags,

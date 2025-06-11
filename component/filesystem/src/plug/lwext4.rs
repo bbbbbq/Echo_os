@@ -314,6 +314,15 @@ pub fn inode_types_2_file_type(inodetype: InodeTypes) -> FileType {
     }
 }
 
+impl core::fmt::Debug for Ext4FileWrapper {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Ext4FileWrapper")
+            .field("file_type", &self.file_type)
+            
+            .finish_non_exhaustive()
+    }
+}
+
 impl Ext4FileWrapper {
     pub fn new(path: &str, types: InodeTypes) -> Self {
         info!("FileWrapper new {:?} {}", types, path);

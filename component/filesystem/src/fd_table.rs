@@ -2,6 +2,7 @@ use crate::file::File;
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 
+#[derive(Debug)]
 pub struct FdTable {
     pub table: BTreeMap<usize, File>,
 }

@@ -104,7 +104,7 @@ pub struct DirEntry {
     pub file_type: FileType,
 }
 
-pub trait Inode: DowncastSync + Send + Sync {
+pub trait Inode: DowncastSync + Send + Sync + core::fmt::Debug {
     fn read_at(&self, _offset: usize, buf: &mut [u8]) -> VfsResult<usize> {
         unimplemented!()
     }

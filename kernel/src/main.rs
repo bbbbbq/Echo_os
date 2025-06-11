@@ -43,7 +43,8 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     init_dt(dtb);
     init_fs();
     let path = Path::new("/busybox".to_string());
-    UserTask::new_frome_file(None, path);
+    let task = UserTask::new_frome_file(None, path);
+    info!("task: {:#?}", task);
     info!("kernel_end");
     arch::os_shut_down();
 }

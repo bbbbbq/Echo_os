@@ -27,9 +27,6 @@ use spin::rwlock::RwLock;
 use trap::trap::TrapFrame;
 use elf_ext::load_elf_frame;
 
-
-
-
 pub struct ProcessControlBlock {
     pub fd_table: FdTable,
     pub mem_set: MemSet,
@@ -53,6 +50,25 @@ pub struct UserTask {
     pub pcb: Arc<Mutex<ProcessControlBlock>>,
     pub parent: RwLock<Weak<UserTask>>,
     pub tcb: RwLock<ThreadControlBlock>,
+}
+
+impl core::fmt::Debug for UserTask {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let pcb = self.pcb.lock();
+        let tcb = self.tcb.read();
+        f.debug_struct("UserTask")
+            .field("task_id", &self.task_id)
+            .field("process_id", &self.process_id)
+            .field("entry", &pcb.entry)
+            .field("exit_code", &pcb.exit_code)
+            .field("thread_exit_code", &tcb.thread_exit_code)
+            .field("current_dir", &pcb.curr_dir)
+            .field("thread_count", &pcb.threads.len())
+            .field("fd_table", &pcb.fd_table)
+            .field("memory_set", &pcb.mem_set)
+            .field("heap", &pcb.heap)
+            .finish()
+    }
 }
 
 impl UserTask {
@@ -89,14 +105,13 @@ impl UserTask {
 
     // elf or other file
     pub fn new_frome_file(parent: Option<Weak<UserTask>>, path: Path) -> Arc<Self> {
-        let load_elf_return = load_elf_frame(path.clone());
+        let mut load_elf_return = load_elf_frame(path.clone());
         info!("load_elf_return: {:?}", load_elf_return);
-        let memset = load_elf_return.memset.clone();
         let mut pagetable = PageTable::new();
-        pagetable.restore();
-        for region in memset.regions.iter() {
+        // pagetable.restore(); // This might not be needed here or could be an old pattern.
+        for region in load_elf_return.memset.regions.iter_mut() {
             info!("region: {:?}", region);
-            pagetable.map_region_user(region.clone());
+            pagetable.map_region_user(region);
         }
         // 根据load_elf_return的信息来初始化
         let task = Arc::new(Self {
