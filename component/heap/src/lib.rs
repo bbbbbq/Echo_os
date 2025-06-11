@@ -2,10 +2,17 @@
 #![feature(alloc_error_handler)]
 extern crate alloc;
 
+use alloc::string::ToString;
+
 use buddy_system_allocator::LockedHeap;
 use config::target::plat::HEAP_SIZE;
 use core::ptr;
 use log::info;
+use mem::memregion::{MemRegion, MemRegionType};
+
+use memory_addr::MemoryAddr;
+use memory_addr::VirtAddrRange;
+use page_table_multiarch::MappingFlags;
 
 // 堆空间
 #[unsafe(link_section = ".bss.heap")]
@@ -37,4 +44,33 @@ pub fn init() {
 #[alloc_error_handler]
 pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
     panic!("Heap allocation error, layout = {:?}", layout)
+}
+
+pub struct HeapUser {
+    virt_range: VirtAddrRange,
+}
+
+impl HeapUser {
+    pub fn new(virt_range: VirtAddrRange) -> Self {
+        assert!(
+            virt_range.start < virt_range.end,
+            "Virtual address range start must be less than end"
+        );
+        assert!(
+            virt_range.start.is_aligned_4k(),
+            "Virtual address start must be 4K aligned"
+        );
+
+        Self { virt_range }
+    }
+
+    pub fn convert_to_memregion(&self) -> MemRegion {
+        MemRegion::new_anonymous(
+            self.virt_range.start,
+            self.virt_range.end,
+            MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE,
+            "user_heap".to_string(),
+            MemRegionType::HEAP,
+        )
+    }
 }

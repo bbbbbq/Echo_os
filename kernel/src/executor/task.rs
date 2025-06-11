@@ -1,6 +1,8 @@
-/// Unique identifier for a task
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TaskId(pub usize);
+use crate::executor::id_alloc::{alloc_tid, dealloc_tid, TaskId};
+use mem::pagetable::get_boot_page_table;
+use alloc::sync::Arc;
+use alloc::boxed::Box;
+use core::pin::Pin;
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -9,12 +11,11 @@ pub enum TaskType {
     User,
 }
 
-
-pub trait AsyncTask
-{
+/// A task that can be executed asynchronously
+pub trait AsyncTask: Send + Sync {
     /// Get the id of the task
     fn get_task_id(&self) -> TaskId;
-    /// Run befire the kernel
+    /// Run before the kernel
     fn before_run(&self);
     /// Get task type.
     fn get_task_type(&self) -> TaskType;
@@ -24,10 +25,26 @@ pub trait AsyncTask
     fn exit_code(&self) -> Option<usize>;
 }
 
+pub type PinedFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
+pub struct AsyncTaskItem {
+    pub future: PinedFuture,
+    pub task: Arc<dyn AsyncTask>,
+}
 
-pub struct KernelTask
-{
-    id:TaskId
+pub struct KernelTask {
+    id: TaskId,
+}
+
+impl KernelTask {
+    pub fn new() -> Self {
+        Self { id: alloc_tid() }
+    }
+}
+
+impl Drop for KernelTask {
+    fn drop(&mut self) {
+        dealloc_tid(self.id);
+    }
 }
 
 impl AsyncTask for KernelTask {
@@ -36,7 +53,7 @@ impl AsyncTask for KernelTask {
     }
 
     fn before_run(&self) {
-        unimplemented!();
+        get_boot_page_table().change_pagetable();
     }
 
     fn get_task_type(&self) -> TaskType {
@@ -44,10 +61,10 @@ impl AsyncTask for KernelTask {
     }
 
     fn exit(&self, _exit_code: usize) {
-        unimplemented!();
+        unreachable!("can't exit kernel task")
     }
 
     fn exit_code(&self) -> Option<usize> {
-        Some(0)
+        unreachable!("can't exit kernel task")
     }
 }

@@ -17,6 +17,7 @@ extern crate alloc;
 pub mod executor;
 use crate::alloc::string::ToString;
 use boot;
+use executor::thread::UserTask;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -41,10 +42,10 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     trap::trap::init();
     init_dt(dtb);
     init_fs();
-
+    let path = Path::new("/busybox".to_string());
+    UserTask::new_frome_file(None, path);
     info!("kernel_end");
     arch::os_shut_down();
-    loop {}
 }
 
 pub fn test_file() {

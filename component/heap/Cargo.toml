@@ -12,3 +12,6 @@ buddy_system_allocator = "0.9"
 config = { workspace = true }
 console = { workspace = true }
 log = { workspace = true }
+memory_addr = { workspace = true }
+mem = { workspace = true }
+page_table_multiarch = { workspace = true }

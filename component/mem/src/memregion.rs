@@ -1,7 +1,7 @@
 use alloc::string::{String, ToString};
 use memory_addr::{MemoryAddr, PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange};
 use page_table_multiarch::MappingFlags;
-
+use super::pagetable::PageTable;
 
 #[derive(Debug,Clone, Copy)]
 pub enum MemRegionType {
@@ -15,7 +15,7 @@ pub enum MemRegionType {
 }
 
 /// Memory region
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct MemRegion {
     pub vaddr_range: VirtAddrRange,
     pub paddr_range: Option<PhysAddrRange>,
@@ -23,6 +23,34 @@ pub struct MemRegion {
     pub name: String,
     pub region_type: MemRegionType,
     pub is_mapped: bool,
+}
+
+impl core::fmt::Display for MemRegion {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "MemRegion {{\n    name: \"{}\",\n    vaddr: {:?}, சின்னமாகn    paddr: {:?}, சின்னமாகn    type: {:?}, சின்னமாகn    mapped: {}, சின்னமாகn    flags: {:?}\n}}",
+            self.name,
+            self.vaddr_range,
+            self.paddr_range,
+            self.region_type,
+            self.is_mapped,
+            self.pte_flags
+        )
+    }
+}
+
+impl core::fmt::Debug for MemRegion {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("MemRegion")
+            .field("name", &self.name)
+            .field("vaddr_range", &self.vaddr_range)
+            .field("paddr_range", &self.paddr_range)
+            .field("pte_flags", &self.pte_flags)
+            .field("region_type", &self.region_type)
+            .field("is_mapped", &self.is_mapped)
+            .finish()
+    }
 }
 
 impl MemRegion {
@@ -74,6 +102,9 @@ impl MemRegion {
             region_type,
             is_mapped: false,
         }
+    }
+    pub fn map_user_frame(&mut self, page_table: &mut PageTable) {
+        page_table.map_region_user_frame(self.clone());
     }
 }
 

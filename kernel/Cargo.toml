@@ -15,6 +15,7 @@ flat_device_tree = { workspace = true }
 virtio = { workspace = true }
 heap = { workspace = true }
 log = { workspace = true }
+memory_addr = { workspace = true }
 virtio-drivers  = { workspace = true }
 frame = { workspace = true }
 device = { workspace = true }
@@ -22,3 +23,11 @@ filesystem = { workspace = true }
 arch = { workspace = true }
 elf_ext = { workspace = true }
 trap = { workspace = true }
+mem = { workspace = true }
+spin = { workspace = true }
+lazy_static = { workspace = true }
+uint_allocator = { workspace = true }
+xmas-elf = { workspace = true }
+config = { workspace = true }
+page_table_multiarch = { workspace = true }
+

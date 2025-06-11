@@ -1,9 +1,11 @@
 use config::target::plat::VIRT_ADDR_START;
-use core::{arch::global_asm, arch::naked_asm, ptr::addr_of_mut};
+use core::arch::{asm, global_asm};
+use core::ptr::{addr_of_mut};
 use riscv::register::satp;
 // Define PTE flags as a simple bitflags enum
 use bitflags::bitflags;
 use console::println;
+use core::arch::naked_asm;
 // Helper function to create page table entries
 fn create_pte(addr: usize, flags: u64) -> u64 {
     ((addr >> 12) << 10) as u64 | flags
@@ -24,10 +26,10 @@ bitflags! {
 }
 
 #[unsafe(link_section = ".data.boot_page_table")]
-static mut BOOT_PT: [u64; 512] = [0; 512];
+static mut BOOT_PAGE_TABLE: [u64; 512] = [0; 512];
 
 unsafe extern "C" fn init_boot_page_table() {
-    let boot_pt = unsafe { addr_of_mut!(BOOT_PT).as_mut().unwrap() };
+    let boot_pt = unsafe { addr_of_mut!(BOOT_PAGE_TABLE).as_mut().unwrap() };
     let flags = PTEFlags::A | PTEFlags::D | PTEFlags::R | PTEFlags::V | PTEFlags::W | PTEFlags::X;
 
     for i in 0..0x100 {
@@ -39,8 +41,13 @@ unsafe extern "C" fn init_boot_page_table() {
     }
 }
 
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn boot_page_table() -> usize {
+    addr_of_mut!(BOOT_PAGE_TABLE) as usize
+}
+
 unsafe extern "C" fn init_mmu() {
-    let ptr = (&raw mut BOOT_PT) as *mut _ as usize;
+    let ptr = &raw mut BOOT_PAGE_TABLE as *mut _ as usize;
     unsafe { satp::set(satp::Mode::Sv39, 0, ptr >> 12) };
     riscv::asm::sfence_vma_all();
 }
