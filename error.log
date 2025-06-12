@@ -1,0 +1,627 @@
+warning: constant `LOGLEVEL` is never used
+ --> kernel/build.rs:3:7
+  |
+3 | const LOGLEVEL: &str = "error";
+  |       ^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` on by default
+
+warning: `kernel` (build script) generated 1 warning
+warning: unused import: `info`
+ --> component/arch/src/riscv64.rs:2:11
+  |
+2 | use log::{info,debug};
+  |           ^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `Satp`
+ --> component/arch/src/riscv64.rs:8:41
+  |
+8 | use riscv::register::satp::{self, Mode, Satp};
+  |                                         ^^^^
+
+warning: unnecessary `unsafe` block
+  --> component/arch/src/riscv64.rs:28:5
+   |
+28 |     unsafe {
+   |     ^^^^^^ unnecessary `unsafe` block
+   |
+   = note: `#[warn(unused_unsafe)]` on by default
+
+warning: unnecessary `unsafe` block
+  --> component/arch/src/riscv64.rs:46:5
+   |
+46 |     unsafe {
+   |     ^^^^^^ unnecessary `unsafe` block
+
+warning: unused `#[macro_use]` import
+ --> component/timer/src/lib.rs:3:1
+  |
+3 | #[macro_use]
+  | ^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `sbi_rt::set_timer`
+ --> component/timer/src/riscv64.rs:3:5
+  |
+3 | use sbi_rt::set_timer;
+  |     ^^^^^^^^^^^^^^^^^
+
+warning: `arch` (lib) generated 4 warnings (run `cargo fix --lib -p arch` to apply 2 suggestions)
+warning: `timer` (lib) generated 2 warnings (run `cargo fix --lib -p timer` to apply 1 suggestion)
+warning: field `end` is never read
+  --> component/frame/src/lib.rs:56:5
+   |
+54 | pub struct FrameAllocator {
+   |            -------------- field in this struct
+55 |     start: PhysAddr,
+56 |     end: PhysAddr,
+   |     ^^^
+   |
+   = note: `FrameAllocator` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` on by default
+
+warning: unused import: `spin::Mutex`
+ --> component/UintAllocator/src/lib.rs:5:5
+  |
+5 | use spin::Mutex;
+  |     ^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `asm`
+ --> component/boot/src/riscv64.rs:2:18
+  |
+2 | use core::arch::{asm, global_asm};
+  |                  ^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: the feature `naked_functions` has been stable since 1.88.0 and no longer requires an attribute to enable
+ --> component/trap/src/lib.rs:2:12
+  |
+2 | #![feature(naked_functions)]
+  |            ^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(stable_features)]` on by default
+
+warning: unreachable expression
+  --> component/trap/src/trap/riscv64.rs:43:13
+   |
+42 |             panic!("kernel error: {:#x}", stval);
+   |             ------------------------------------ any code following this expression is unreachable
+43 |             TrapType::Unknown
+   |             ^^^^^^^^^^^^^^^^^ unreachable expression
+   |
+   = note: `#[warn(unreachable_code)]` on by default
+
+warning: unnecessary `unsafe` block
+   --> component/trap/src/trap/riscv64.rs:104:5
+    |
+104 |     unsafe {
+    |     ^^^^^^ unnecessary `unsafe` block
+    |
+    = note: `#[warn(unused_unsafe)]` on by default
+
+warning: `frame` (lib) generated 1 warning
+warning: `uint_allocator` (lib) generated 1 warning (run `cargo fix --lib -p uint_allocator` to apply 1 suggestion)
+warning: `boot` (lib) generated 1 warning (run `cargo fix --lib -p boot` to apply 1 suggestion)
+warning: `trap` (lib) generated 3 warnings
+warning: unused import: `VirtIOHeader`
+  --> component/driver/virtio/src/blk.rs:11:54
+   |
+11 | use virtio_drivers::transport::mmio::{MmioTransport, VirtIOHeader};
+   |                                                      ^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `device_set::DEVICE_SET`
+  --> component/driver/virtio/src/blk.rs:14:5
+   |
+14 | use device_set::DEVICE_SET; // Renamed in Cargo.toml for virtio crate
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `alloc_frame` and `dealloc_frame`
+ --> component/driver/virtio/src/halimpl.rs:2:43
+  |
+2 | use frame::{FrameTracer, alloc_continues, alloc_frame, dealloc_continues, dealloc_frame};
+  |                                           ^^^^^^^^^^^                     ^^^^^^^^^^^^^
+
+warning: unused imports: `FRAME_SIZE` and `PAGE_SIZE`
+ --> component/driver/virtio/src/halimpl.rs:6:28
+  |
+6 | use config::target::plat::{FRAME_SIZE, PAGE_SIZE, VIRT_ADDR_START};
+  |                            ^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `core::ptr::NonNull`
+ --> component/driver/virtio/src/lib.rs:8:5
+  |
+8 | use core::ptr::NonNull;
+  |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Fdt` and `node::FdtNode`
+ --> component/driver/virtio/src/lib.rs:9:24
+  |
+9 | use flat_device_tree::{Fdt, node::FdtNode};
+  |                        ^^^  ^^^^^^^^^^^^^
+
+warning: unused imports: `info` and `warn`
+  --> component/driver/virtio/src/lib.rs:10:11
+   |
+10 | use log::{info, warn};
+   |           ^^^^  ^^^^
+
+warning: unused import: `virtio_drivers::transport::DeviceType`
+  --> component/driver/virtio/src/lib.rs:11:5
+   |
+11 | use virtio_drivers::transport::DeviceType;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `MmioTransport` and `VirtIOHeader`
+  --> component/driver/virtio/src/lib.rs:12:39
+   |
+12 | use virtio_drivers::transport::mmio::{MmioTransport, VirtIOHeader};
+   |                                       ^^^^^^^^^^^^^  ^^^^^^^^^^^^
+
+warning: `#[macro_use]` only has an effect on `extern crate` and modules
+  --> component/driver/virtio/src/blk.rs:12:1
+   |
+12 | #[macro_use]
+   | ^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_attributes)]` on by default
+
+warning: unused import: `ToString`
+ --> component/mem/src/memregion.rs:1:29
+  |
+1 | use alloc::string::{String, ToString};
+  |                             ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `lazy_static::lazy_static`
+  --> component/mem/src/pagetable/riscv64.rs:10:5
+   |
+10 | use lazy_static::lazy_static;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `core::arch::asm`
+  --> component/mem/src/pagetable/riscv64.rs:14:5
+   |
+14 | use core::arch::asm;
+   |     ^^^^^^^^^^^^^^^
+
+warning: type alias `OsPageTable` is never used
+  --> component/mem/src/lib.rs:18:14
+   |
+18 |         type OsPageTable<H> = Sv39PageTable<H>;
+   |              ^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: `virtio` (lib) generated 10 warnings (run `cargo fix --lib -p virtio` to apply 9 suggestions)
+warning: `mem` (lib) generated 4 warnings (run `cargo fix --lib -p mem` to apply 3 suggestions)
+warning: unused variable: `dev`
+   --> component/filesystem/src/plug/lwext4.rs:260:14
+    |
+260 |     fn flush(dev: &mut Self::DevType) -> Result<usize, i32> {
+    |              ^^^ help: if this is intentional, prefix it with an underscore: `_dev`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `buf`
+   --> component/filesystem/src/vfs.rs:108:39
+    |
+108 |     fn read_at(&self, _offset: usize, buf: &mut [u8]) -> VfsResult<usize> {
+    |                                       ^^^ help: if this is intentional, prefix it with an underscore: `_buf`
+
+warning: unused variable: `buf`
+   --> component/filesystem/src/vfs.rs:111:40
+    |
+111 |     fn write_at(&self, _offset: usize, buf: &[u8]) -> VfsResult<usize> {
+    |                                        ^^^ help: if this is intentional, prefix it with an underscore: `_buf`
+
+warning: unused variable: `name`
+   --> component/filesystem/src/vfs.rs:114:24
+    |
+114 |     fn mkdir_at(&self, name: &str) -> VfsResult<()> {
+    |                        ^^^^ help: if this is intentional, prefix it with an underscore: `_name`
+
+warning: unused variable: `name`
+   --> component/filesystem/src/vfs.rs:117:22
+    |
+117 |     fn rm_dir(&self, name: &str) -> VfsResult<()> {
+    |                      ^^^^ help: if this is intentional, prefix it with an underscore: `_name`
+
+warning: unused variable: `name`
+   --> component/filesystem/src/vfs.rs:120:23
+    |
+120 |     fn rm_file(&self, name: &str) -> VfsResult<()> {
+    |                       ^^^^ help: if this is intentional, prefix it with an underscore: `_name`
+
+warning: unused variable: `name`
+   --> component/filesystem/src/vfs.rs:123:22
+    |
+123 |     fn lookup(&self, name: &str) -> VfsResult<Arc<dyn Inode>> {
+    |                      ^^^^ help: if this is intentional, prefix it with an underscore: `_name`
+
+warning: unused variable: `name`
+   --> component/filesystem/src/vfs.rs:129:27
+    |
+129 |     fn create_file(&self, name: &str) -> VfsResult<()> {
+    |                           ^^^^ help: if this is intentional, prefix it with an underscore: `_name`
+
+warning: unused variable: `name`
+   --> component/filesystem/src/vfs.rs:138:22
+    |
+138 |     fn rename(&self, name: &str) -> VfsResult<()> {
+    |                      ^^^^ help: if this is intentional, prefix it with an underscore: `_name`
+
+warning: unused variable: `fs`
+   --> component/filesystem/src/vfs.rs:141:21
+    |
+141 |     fn mount(&self, fs: Arc<dyn FileSystem>, path: Path) -> VfsResult<()> {
+    |                     ^^ help: if this is intentional, prefix it with an underscore: `_fs`
+
+warning: unused variable: `path`
+   --> component/filesystem/src/vfs.rs:141:46
+    |
+141 |     fn mount(&self, fs: Arc<dyn FileSystem>, path: Path) -> VfsResult<()> {
+    |                                              ^^^^ help: if this is intentional, prefix it with an underscore: `_path`
+
+warning: field `id` is never read
+  --> component/filesystem/src/plug/lwext4.rs:49:5
+   |
+48 | pub struct Ext4DiskWrapper {
+   |            --------------- field in this struct
+49 |     id: usize,
+   |     ^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: field `inner` is never read
+   --> component/filesystem/src/plug/lwext4.rs:266:5
+    |
+265 | pub struct Ext4FileSystemWrapper {
+    |            --------------------- field in this struct
+266 |     inner: Ext4BlockWrapper<Ext4DiskWrapper>,
+    |     ^^^^^
+
+warning: `filesystem` (lib) generated 13 warnings
+warning: unused variable: `ph_count`
+   --> component/elf_ext/src/lib.rs:135:9
+    |
+135 |     let ph_count = elf.header.pt2.ph_count() as usize;
+    |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_ph_count`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `entry_point`
+   --> component/elf_ext/src/lib.rs:137:9
+    |
+137 |     let entry_point = elf.header.pt2.entry_point() as usize;
+    |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_entry_point`
+
+warning: `elf_ext` (lib) generated 2 warnings
+   Compiling kernel v0.1.0 (/home/cgbc/os_dev_env/code/Echo_os/kernel)
+warning: unused import: `alloc::vec`
+ --> kernel/src/main.rs:3:5
+  |
+3 | use alloc::vec;
+  |     ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused doc comment
+  --> kernel/src/executor/executor.rs:25:1
+   |
+25 | /// Global executor
+   | ^^^^^^^^^^^^^^^^^^^ rustdoc does not generate documentation for macro invocations
+   |
+   = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+   = note: `#[warn(unused_doc_comments)]` on by default
+
+warning: unused import: `crate::executor::id_alloc`
+ --> kernel/src/executor/executor.rs:9:5
+  |
+9 | use crate::executor::id_alloc;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `downcast_rs::DowncastSync`
+  --> kernel/src/executor/executor.rs:17:5
+   |
+17 | use downcast_rs::DowncastSync;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::executor::id_alloc::alloc_tid`
+  --> kernel/src/executor/executor.rs:18:5
+   |
+18 | use crate::executor::id_alloc::alloc_tid;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `get_boot_page_table`
+ --> kernel/src/executor/task.rs:2:45
+  |
+2 | use mem::pagetable::{change_boot_pagetable, get_boot_page_table};
+  |                                             ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::executor::executor::Executor`
+ --> kernel/src/executor/thread.rs:3:5
+  |
+3 | use crate::executor::executor::Executor;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `add_ready_task`
+ --> kernel/src/executor/thread.rs:5:23
+  |
+5 | use super::executor::{add_ready_task, get_cur_usr_task};
+  |                       ^^^^^^^^^^^^^^
+
+warning: unused import: `alloc::sync`
+ --> kernel/src/executor/thread.rs:7:5
+  |
+7 | use alloc::sync;
+  |     ^^^^^^^^^^^
+
+warning: unused import: `config::target::plat::PAGE_SIZE`
+  --> kernel/src/executor/thread.rs:11:5
+   |
+11 | use config::target::plat::PAGE_SIZE;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `config::target::plat::USER_DYN_ADDR`
+  --> kernel/src/executor/thread.rs:12:5
+   |
+12 | use config::target::plat::USER_DYN_ADDR;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `elf_ext::ElfExt`
+  --> kernel/src/executor/thread.rs:13:5
+   |
+13 | use elf_ext::ElfExt;
+   |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `filesystem::file`
+  --> kernel/src/executor/thread.rs:15:5
+   |
+15 | use filesystem::file;
+   |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `filesystem::file::File`
+  --> kernel/src/executor/thread.rs:16:5
+   |
+16 | use filesystem::file::File;
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `OpenFlags` and `VfsError`
+  --> kernel/src/executor/thread.rs:18:43
+   |
+18 | use filesystem::{fd_table::FdTable, vfs::{OpenFlags, VfsError}};
+   |                                           ^^^^^^^^^  ^^^^^^^^
+
+warning: unused imports: `alloc_continues` and `alloc_frame`
+  --> kernel/src/executor/thread.rs:19:13
+   |
+19 | use frame::{alloc_continues, alloc_frame};
+   |             ^^^^^^^^^^^^^^^  ^^^^^^^^^^^
+
+warning: unused import: `log::debug`
+  --> kernel/src/executor/thread.rs:21:5
+   |
+21 | use log::debug;
+   |     ^^^^^^^^^^
+
+warning: unused import: `mem::memregion::MemRegion`
+  --> kernel/src/executor/thread.rs:23:5
+   |
+23 | use mem::memregion::MemRegion;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `mem::memregion::MemRegionType`
+  --> kernel/src/executor/thread.rs:24:5
+   |
+24 | use mem::memregion::MemRegionType;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `mem::pagetable`
+  --> kernel/src/executor/thread.rs:26:5
+   |
+26 | use mem::pagetable;
+   |     ^^^^^^^^^^^^^^
+
+warning: unused import: `mem::pagetable::get_boot_page_table`
+  --> kernel/src/executor/thread.rs:27:5
+   |
+27 | use mem::pagetable::get_boot_page_table;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `memory_addr::MemoryAddr`
+  --> kernel/src/executor/thread.rs:29:5
+   |
+29 | use memory_addr::MemoryAddr;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `PhysAddrRange` and `PhysAddr`
+  --> kernel/src/executor/thread.rs:30:19
+   |
+30 | use memory_addr::{PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange};
+   |                   ^^^^^^^^  ^^^^^^^^^^^^^
+
+warning: unused import: `page_table_multiarch::MappingFlags`
+  --> kernel/src/executor/thread.rs:31:5
+   |
+31 | use page_table_multiarch::MappingFlags;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `riscv::register::sstatus`
+  --> kernel/src/executor/thread.rs:32:5
+   |
+32 | use riscv::register::sstatus;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::error::TaskError`
+  --> kernel/src/executor/thread.rs:42:5
+   |
+42 | use super::error::TaskError;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `alloc::boxed::Box`
+  --> kernel/src/executor/thread.rs:44:5
+   |
+44 | use alloc::boxed::Box;
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `spin::Mutex`
+ --> kernel/src/executor/id_alloc.rs:2:5
+  |
+2 | use spin::Mutex;
+  |     ^^^^^^^^^^^
+
+warning: unused import: `lazy_static::*`
+ --> kernel/src/executor/id_alloc.rs:3:5
+  |
+3 | use lazy_static::*;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused imports: `release_task` and `tid2task`
+ --> kernel/src/executor/initproc.rs:3:33
+  |
+3 | use crate::executor::executor::{release_task, TASK_MAP, tid2task};
+  |                                 ^^^^^^^^^^^^            ^^^^^^^^
+
+warning: unused import: `crate::executor::id_alloc::alloc_tid`
+ --> kernel/src/executor/initproc.rs:7:5
+  |
+7 | use crate::executor::id_alloc::alloc_tid;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `alloc::boxed::Box`
+ --> kernel/src/executor/initproc.rs:8:5
+  |
+8 | use alloc::boxed::Box;
+  |     ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `executor::thread::UserTask`
+  --> kernel/src/main.rs:20:5
+   |
+20 | use executor::thread::UserTask;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::executor::thread::UserTask`
+ --> kernel/src/user_handler/entry.rs:2:5
+  |
+2 | use crate::executor::thread::UserTask;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::executor::ops::yield_now`
+ --> kernel/src/user_handler/entry.rs:5:5
+  |
+5 | use crate::executor::ops::yield_now;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `TASK_QUEUE`
+  --> kernel/src/main.rs:22:50
+   |
+22 | use crate::executor::executor::{GLOBLE_EXECUTOR, TASK_QUEUE, info_task_queue, spawn_blank};
+   |                                                  ^^^^^^^^^^
+
+warning: unused variable: `cx_ref`
+  --> kernel/src/user_handler/entry.rs:21:41
+   |
+21 |     pub async fn entry_point(&mut self, cx_ref: &mut TrapFrame) {
+   |                                         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_cx_ref`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `times`
+  --> kernel/src/user_handler/entry.rs:22:17
+   |
+22 |         let mut times: i32 = 0;
+   |                 ^^^^^ help: if this is intentional, prefix it with an underscore: `_times`
+
+warning: variable does not need to be mutable
+  --> kernel/src/user_handler/entry.rs:22:13
+   |
+22 |         let mut times: i32 = 0;
+   |             ----^^^^^
+   |             |
+   |             help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` on by default
+
+error[E0599]: no method named `force_cx_ref` found for enum `Option` in the current scope
+   --> kernel/src/user_handler/entry.rs:13:23
+    |
+13  |     let cx_ref = task.force_cx_ref();
+    |                       ^^^^^^^^^^^^ method not found in `Option<Arc<UserTask>>`
+    |
+note: the method `force_cx_ref` exists on the type `Arc<UserTask>`
+   --> kernel/src/executor/thread.rs:252:5
+    |
+252 |     pub fn force_cx_ref(&self) -> &'static mut TrapFrame {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Option::expect` to unwrap the `Arc<UserTask>` value, panicking if the value is an `Option::None`
+    |
+13  |     let cx_ref = task.expect("REASON").force_cx_ref();
+    |                      +++++++++++++++++
+
+error[E0599]: no method named `get_task_id` found for enum `Option` in the current scope
+  --> kernel/src/user_handler/entry.rs:14:20
+   |
+14 |     let tid = task.get_task_id();
+   |                    ^^^^^^^^^^^ method not found in `Option<Arc<UserTask>>`
+   |
+note: the method `get_task_id` exists on the type `Arc<UserTask>`
+  --> kernel/src/executor/task.rs:19:5
+   |
+19 |     fn get_task_id(&self) -> TaskId;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = help: items from traits can only be used if the trait is implemented and in scope
+note: `AsyncTask` defines an item `get_task_id`, perhaps you need to implement it
+  --> kernel/src/executor/task.rs:17:1
+   |
+17 | pub trait AsyncTask: DowncastSync + Send + Sync + Debug {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: consider using `Option::expect` to unwrap the `Arc<UserTask>` value, panicking if the value is an `Option::None`
+   |
+14 |     let tid = task.expect("REASON").get_task_id();
+   |                   +++++++++++++++++
+
+error[E0308]: mismatched types
+  --> kernel/src/user_handler/entry.rs:15:23
+   |
+15 |         UserHandler { task, tid }.entry_point(cx_ref).await;
+   |                       ^^^^ expected `Arc<UserTask>`, found `Option<Arc<UserTask>>`
+   |
+   = note: expected struct `Arc<_>`
+                found enum `Option<Arc<_>>`
+help: consider using `Option::expect` to unwrap the `Option<Arc<UserTask>>` value, panicking if the value is an `Option::None`
+   |
+15 |         UserHandler { task: task.expect("REASON"), tid }.entry_point(cx_ref).await;
+   |                           +++++++++++++++++++++++
+
+warning: unreachable expression
+  --> kernel/src/main.rs:39:5
+   |
+38 |     os_shut_down();
+   |     -------------- any code following this expression is unreachable
+39 |     loop {}
+   |     ^^^^^^^ unreachable expression
+   |
+   = note: `#[warn(unreachable_code)]` on by default
+
+warning: unreachable expression
+  --> kernel/src/main.rs:58:5
+   |
+57 |     arch::os_shut_down();
+   |     -------------------- any code following this expression is unreachable
+58 |     loop {}
+   |     ^^^^^^^ unreachable expression
+
+Some errors have detailed explanations: E0308, E0599.
+For more information about an error, try `rustc --explain E0308`.
+warning: `kernel` (bin "kernel") generated 41 warnings
+error: could not compile `kernel` (bin "kernel") due to 3 previous errors; 41 warnings emitted
+make: *** [Makefile:35: cargo-build] Error 101

@@ -4,7 +4,7 @@ use crate::memset::MemSet;
 use crate::pag_hal;
 use crate::pag_hal::PagingHandlerImpl;
 use arch::change_pagetable;
-
+use log::info;
 use config::target::plat::PAGE_SIZE;
 use frame::alloc_continues;
 use lazy_static::lazy_static;
@@ -60,28 +60,17 @@ impl PageTable {
         }
     }
 
-
     pub fn restore(&mut self) {
-        // 获取启动页表和当前新页表的根页表的物理地址
-        let boot_root_paddr = get_boot_page_table().page_table.root_paddr();
-        let new_root_paddr = self.page_table.root_paddr();
-
-        // 通过物理地址转虚拟地址，得到可以访问页表内容的裸指针
-        let boot_root_ptr = PagingHandlerImpl::phys_to_virt(boot_root_paddr).as_ptr() as *const u64;
-        let new_root_ptr = PagingHandlerImpl::phys_to_virt(new_root_paddr).as_mut_ptr() as *mut u64;
-
-        // 将裸指针转换为切片，以便安全访问
-        let boot_entries = unsafe { core::slice::from_raw_parts(boot_root_ptr, 512) };
-        let new_entries = unsafe { core::slice::from_raw_parts_mut(new_root_ptr, 512) };
-
-        // 复制内核空间的映射（高 256 个条目）
-        // 新页表的低 256 个条目（用户空间）保持为空，等待后续映射
-        new_entries[256..].copy_from_slice(&boot_entries[256..]);
-
-        // Explicitly clear the User (U) flag from kernel space entries
-        for pte in new_entries[256..].iter_mut() {
-            if *pte != 0 {
-                *pte &= !MappingFlags::USER.bits() as u64;
+        let mut paddr = unsafe { boot_page_table() };
+        if paddr >= VIRT_ADDR_START {
+            paddr -= VIRT_ADDR_START;
+        }
+        let boot_pte_arrary = paddr as *mut [u64; 512];
+        let current_pte_arrary = self.page_table.root_paddr().as_usize() as *mut [u64; 512];
+        unsafe {
+            (*current_pte_arrary)[0x100..].copy_from_slice(&(*boot_pte_arrary)[0x100..]);
+            for i in 0..0x100 {
+                (*current_pte_arrary)[i] = 0;
             }
         }
     }

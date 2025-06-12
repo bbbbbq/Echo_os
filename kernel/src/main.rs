@@ -50,11 +50,13 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     trap::trap::init();
     init_dt(dtb);
     init_fs();
+
+    info!("\n\n\\n\n\n\n\n");
     spawn_blank(initproc());
     info_task_queue();
-    GLOBLE_EXECUTOR.lock().run_ready_task();
+    GLOBLE_EXECUTOR.run();
     info!("kernel_end");
-    os_shut_down();
+    arch::os_shut_down();
     loop {}
 }
 

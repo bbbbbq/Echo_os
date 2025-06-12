@@ -27,6 +27,7 @@ async fn command(cmd: &str) {
             info!("Final arguments: {:?}", args_extend);
             let task_id = add_user_task(&filename, args_extend, Vec::new()).await;
             info!("Task created with ID: {:?}", task_id);
+            yield_now().await;
             while TASK_MAP.lock().len() > 1 {
                 info!("Waiting for task to complete, remaining tasks: {}", TASK_MAP.lock().len());
                 yield_now().await;

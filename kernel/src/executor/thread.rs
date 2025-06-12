@@ -143,10 +143,11 @@ impl UserTask {
         let cx = UserTask::init_cx(load_elf_return.clone());
         info!("load_elf_return: {:?}", load_elf_return);
         let mut pagetable = PageTable::new();
-        
+        pagetable.restore();
         for region in load_elf_return.memset.regions.iter_mut() {
             info!("region: {:?}", region);
             pagetable.map_region_user(region);
+            region.is_mapped = true;
         }
         
         // Initialize task based on load_elf_return information
@@ -176,9 +177,6 @@ impl UserTask {
         Some(task)
     }
 
-
-    
-
     pub fn push_num(&self, num: usize) -> usize {
         let mut tcb = self.tcb.write();
 
@@ -205,45 +203,68 @@ impl UserTask {
         sp
     }
 
+    fn push_array(&self, tcb: &mut ThreadControlBlock, array: &[usize]) -> usize {
+        let byte_len = array.len() * size_of::<usize>();
+        let sp = tcb.cx[TrapFrameArgs::SP] - byte_len;
+        let ptr = VirtAddr::from(sp).as_mut_ptr();
+        unsafe {
+            let slice = core::slice::from_raw_parts_mut(ptr, byte_len);
+            let src_bytes = core::slice::from_raw_parts(array.as_ptr() as *const u8, byte_len);
+            slice.copy_from_slice(src_bytes);
+        }
+        tcb.cx[TrapFrameArgs::SP] = sp;
+        sp
+    }
+
+    fn push_str(&self, tcb: &mut ThreadControlBlock, s: &str) -> usize {
+        const ULEN: usize = size_of::<usize>();
+        let sp = tcb.cx[TrapFrameArgs::SP] - (s.len() + 1); // +1 for null terminator
+        let aligned_sp = sp & !(ULEN - 1);
+        let ptr = VirtAddr::from(aligned_sp).as_mut_ptr();
+        unsafe {
+            let slice = core::slice::from_raw_parts_mut(ptr, s.len() + 1);
+            slice[..s.len()].copy_from_slice(s.as_bytes());
+            slice[s.len()] = 0;
+        }
+        tcb.cx[TrapFrameArgs::SP] = aligned_sp;
+        aligned_sp
+    }
+
     pub fn init_task_stack(&self, args: Vec<String>, envp: Vec<String>) {
         let mut tcb = self.tcb.write();
 
-        // Push environment variables
-        let mut envp_ptrs: Vec<usize> = Vec::new();
-        for env in envp.iter().rev() {
-            self.push_num(0); // Null terminator
-            let sp = self.push_bytes(env.as_bytes());
-            envp_ptrs.push(sp);
-        }
+        // Push environment variables and get pointers
+        let envp_ptrs: Vec<usize> = envp
+            .iter()
+            .map(|env| self.push_str(&mut tcb, env))
+            .collect();
 
-        // Push arguments
-        let mut argv_ptrs: Vec<usize> = Vec::new();
-        for arg in args.iter().rev() {
-            self.push_num(0); // Null terminator
-            let sp = self.push_bytes(arg.as_bytes());
-            argv_ptrs.push(sp);
-        }
+        // Push arguments and get pointers
+        let argv_ptrs: Vec<usize> = args
+            .iter()
+            .map(|arg| self.push_str(&mut tcb, arg))
+            .collect();
 
-        // Push auxv
-        self.push_num(0); // AT_NULL
-        self.push_num(0);
+        // Align stack before pushing pointers
+        let sp = tcb.cx[TrapFrameArgs::SP];
+        let aligned_sp = sp & !(size_of::<usize>() - 1);
+        tcb.cx[TrapFrameArgs::SP] = aligned_sp;
 
-        // Push envp pointers
-        self.push_num(0); // Null terminator
-        for ptr in envp_ptrs.iter() {
-            self.push_num(*ptr);
-        }
+        // Push auxv (null terminator)
+        self.push_array(&mut tcb, &[0, 0]);
 
-        // Push argv pointers
-        self.push_num(0); // Null terminator
-        for ptr in argv_ptrs.iter() {
-            self.push_num(*ptr);
-        }
+        // Push envp pointers (with null terminator)
+        self.push_array(&mut tcb, &[0]);
+        self.push_array(&mut tcb, &envp_ptrs);
+
+        // Push argv pointers (with null terminator)
+        self.push_array(&mut tcb, &[0]);
+        self.push_array(&mut tcb, &argv_ptrs);
 
         // Push argc
-        self.push_num(args.len());
+        self.push_array(&mut tcb, &[args.len()]);
 
-        // Set a0 to argc and a1 to argv, though this is often done by the entry code
+        // Set a0 to argc and a1 to argv pointer
         tcb.cx.x[10] = args.len();
         tcb.cx.x[11] = tcb.cx[TrapFrameArgs::SP];
     }
@@ -258,6 +279,7 @@ impl AsyncTask for UserTask {
     fn before_run(&self) {
         self.page_table.change_pagetable();
     }
+
     fn get_task_id(&self) -> TaskId {
         self.task_id
     }
@@ -274,21 +296,41 @@ impl AsyncTask for UserTask {
         unimplemented!()
     }
 }
-
-pub async fn add_user_task(filename: &str, args: Vec<&str>, envp: Vec<&str>) -> TaskId
-{
+pub async fn add_user_task(filename: &str, args: Vec<&str>, envp: Vec<&str>) -> TaskId {
+    info!("Adding user task: {}", filename);
     let parent = get_cur_usr_task();
+    if let Some(p) = &parent {
+        info!("Parent task ID: {:?}", p.get_task_id());
+    } else {
+        info!("No parent user task found.");
+    }
+
     let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
     let envp: Vec<String> = envp.iter().map(|s| s.to_string()).collect();
 
-    let task = UserTask::new_frome_file(Some(Arc::downgrade(&parent)), Path::new(filename.to_owned()))
-        .await.expect("Failed to create task from file");
+    info!("Creating task from file: {}", filename);
+    let task = UserTask::new_frome_file(
+        parent.as_ref().map(Arc::downgrade),
+        Path::new(filename.to_owned()),
+    )
+    .await
+    .expect("Failed to create task from file");
 
+    info!(
+        "Initializing task stack with {} args and {} env vars",
+        args.len(),
+        envp.len()
+    );
     task.init_task_stack(args, envp);
-    parent.before_run();
+    if let Some(p) = &parent {
+        p.before_run();
+    }
     let task_id = task.get_task_id();
+    info!("New task created with ID: {:?}", task_id);
     let future = user_entry();
     let task_tmp = AsyncTaskItem { task, future };
-    GLOBLE_EXECUTOR.lock().spawn(task_tmp);
+    info!("Spawning task into executor");
+    GLOBLE_EXECUTOR.spawn(task_tmp);
+    info!("User task {:?} added successfully", task_id);
     task_id
 }
