@@ -61,6 +61,7 @@ impl PageTable {
     }
 
     pub fn restore(&mut self) {
+        self.release();
         let mut paddr = unsafe { boot_page_table() };
         if paddr >= VIRT_ADDR_START {
             paddr -= VIRT_ADDR_START;
@@ -75,6 +76,15 @@ impl PageTable {
         }
     }
 
+    pub fn release(&mut self)
+    {
+        let current_pte_array = self.page_table.root_paddr().as_usize() as *mut [u64; 512];
+        unsafe {
+            for i in 0..512 {
+                (*current_pte_array)[i] = 0;
+            }
+        }
+    }
 
     pub fn map_region_user_frame(&mut self, area: &mut MemRegion) {
         let start_vaddr = area.vaddr_range.start;
