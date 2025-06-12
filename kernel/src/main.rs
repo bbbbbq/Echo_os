@@ -18,7 +18,11 @@ pub mod executor;
 use crate::alloc::string::ToString;
 use boot;
 use executor::thread::UserTask;
-
+pub mod user_handler;
+use crate::executor::executor::{GLOBLE_EXECUTOR, TASK_QUEUE, info_task_queue, spawn_blank};
+use crate::executor::initproc::initproc;
+use boot::boot_page_table;
+use arch::os_shut_down;
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     if let Some(location) = info.location() {
@@ -31,22 +35,27 @@ fn panic(info: &PanicInfo) -> ! {
     } else {
         error!("[panic] Panicked: {}", info.message());
     }
+    os_shut_down();
     loop {}
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     console::init();
+    unsafe {
+        info!("boot_page_table: {:x}", boot_page_table());
+    }
     println!("hart_id : {:x} dtb: {:x}", hartid, dtb);
     heap::init();
     trap::trap::init();
     init_dt(dtb);
     init_fs();
-    let path = Path::new("/busybox".to_string());
-    let task = UserTask::new_frome_file(None, path);
-    info!("task: {:#?}", task);
+    spawn_blank(initproc());
+    info_task_queue();
+    GLOBLE_EXECUTOR.lock().run_ready_task();
     info!("kernel_end");
-    arch::os_shut_down();
+    os_shut_down();
+    loop {}
 }
 
 pub fn test_file() {

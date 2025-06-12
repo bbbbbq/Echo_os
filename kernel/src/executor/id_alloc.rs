@@ -9,7 +9,7 @@ create_uint_allocator!(TaskIdAllocator,0,0x1000);
 
 
 /// Unique identifier for a task
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct TaskId(pub usize);
 
 impl TaskId

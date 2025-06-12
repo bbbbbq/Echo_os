@@ -8,7 +8,7 @@ test = false
 bench = false
 
 [dependencies]
-
+log = {workspace = true }
 
 [target.'cfg(target_arch = "riscv64")'.dependencies]
 riscv = "0.13.0"

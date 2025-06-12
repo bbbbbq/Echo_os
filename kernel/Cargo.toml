@@ -30,4 +30,8 @@ uint_allocator = { workspace = true }
 xmas-elf = { workspace = true }
 config = { workspace = true }
 page_table_multiarch = { workspace = true }
-
+downcast-rs = { workspace = true }
+bitflags = { workspace = true }
+async-recursion = { workspace = true }
+[target.'cfg(target_arch = "riscv64")'.dependencies]
+riscv = "0.13.0"

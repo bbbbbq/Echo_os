@@ -80,15 +80,16 @@ impl ElfExt for ElfFile<'_> {
 pub struct LoadElfReturn {
     pub frame_addr: usize,
     pub file_size: usize,
+    pub ph_count: usize,
     pub ph_addr: usize,
-    pub ph_size: usize,
+    pub ph_entry_size: usize,
     pub entry_point: usize,
     pub memset: MemSet,
     pub stack_top: usize,
     pub stack_size: usize,
     pub heap_bottom: usize,
     pub heap_size: usize,
-    pub base:usize
+    pub base:usize,
 }
 
 impl core::fmt::Debug for LoadElfReturn {
@@ -97,7 +98,8 @@ impl core::fmt::Debug for LoadElfReturn {
             .field("frame_addr", &format_args!("0x{:x}", self.frame_addr))
             .field("file_size", &self.file_size)
             .field("ph_addr", &format_args!("0x{:x}", self.ph_addr))
-            .field("ph_size", &self.ph_size)
+            .field("ph_count", &self.ph_count)
+            .field("ph_entry_size", &self.ph_entry_size)
             .field("entry_point", &format_args!("0x{:x}", self.entry_point))
             .field("memset", &self.memset)
             .field("stack_top", &format_args!("0x{:x}", self.stack_top))
@@ -130,7 +132,8 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
     );
     let elf = ElfFile::new(buffer).expect("Failed to parse ELF file");
     let ph_addr = frame_addr + elf.header.pt2.ph_offset() as usize;
-    let ph_size = elf.header.pt2.ph_entry_size() as usize * elf.header.pt2.ph_count() as usize;
+    let ph_count = elf.header.pt2.ph_count() as usize;
+    let ph_entry_size = elf.header.pt2.ph_entry_size() as usize;
     let entry_point = elf.header.pt2.entry_point() as usize;
 
     // 获取要映射的内存区域
@@ -242,7 +245,8 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
         frame_addr,
         file_size,
         ph_addr,
-        ph_size,
+        ph_count: ph_count.into(),
+        ph_entry_size,
         entry_point: elf.header.pt2.entry_point() as usize,
         memset,
         stack_top: stack_top.as_usize(),

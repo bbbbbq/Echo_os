@@ -1,10 +1,12 @@
 use crate::executor::id_alloc::{alloc_tid, dealloc_tid, TaskId};
-use mem::pagetable::get_boot_page_table;
+use mem::pagetable::{change_boot_pagetable, get_boot_page_table};
 use alloc::sync::Arc;
 use alloc::boxed::Box;
 use core::pin::Pin;
-
-
+use downcast_rs::{impl_downcast, DowncastSync};
+use core::fmt::Debug;
+use arch::flush;
+/// A task type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskType {
     Kernel,
@@ -12,7 +14,7 @@ pub enum TaskType {
 }
 
 /// A task that can be executed asynchronously
-pub trait AsyncTask: Send + Sync {
+pub trait AsyncTask: DowncastSync + Send + Sync + Debug {
     /// Get the id of the task
     fn get_task_id(&self) -> TaskId;
     /// Run before the kernel
@@ -25,12 +27,24 @@ pub trait AsyncTask: Send + Sync {
     fn exit_code(&self) -> Option<usize>;
 }
 
+
 pub type PinedFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
+
 pub struct AsyncTaskItem {
     pub future: PinedFuture,
     pub task: Arc<dyn AsyncTask>,
 }
 
+impl core::fmt::Debug for AsyncTaskItem {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("AsyncTaskItem")
+            .field("task", &self.task)
+            .field("future", &"<Opaque Future>")
+            .finish()
+    }
+}
+
+#[derive(Debug)]
 pub struct KernelTask {
     id: TaskId,
 }
@@ -53,7 +67,8 @@ impl AsyncTask for KernelTask {
     }
 
     fn before_run(&self) {
-        get_boot_page_table().change_pagetable();
+        change_boot_pagetable();
+        flush();
     }
 
     fn get_task_type(&self) -> TaskType {
@@ -68,3 +83,6 @@ impl AsyncTask for KernelTask {
         unreachable!("can't exit kernel task")
     }
 }
+
+
+impl_downcast!(sync AsyncTask);

@@ -1,23 +1,27 @@
 use crate::memregion::MemRegion;
+use config::target::plat::VIRT_ADDR_START;
 use crate::memset::MemSet;
 use crate::pag_hal;
 use crate::pag_hal::PagingHandlerImpl;
 use arch::change_pagetable;
-use arch::flush;
+
 use config::target::plat::PAGE_SIZE;
 use frame::alloc_continues;
 use lazy_static::lazy_static;
 use memory_addr::{MemoryAddr, PhysAddr, VirtAddr};
 use page_table_multiarch::{MappingFlags, PagingHandler, riscv::Sv39PageTable};
 use log::error;
-
+use core::arch::asm;
 
 unsafe extern "C" {
     fn boot_page_table() -> usize;
 }
 
 pub fn get_boot_page_table() -> PageTable {
-    let paddr = unsafe { boot_page_table() };
+    let vaddr = unsafe { boot_page_table() };
+    // The boot_page_table() returns a virtual address, but SATP needs a physical address.
+    // We must convert the VA to a PA before using it.
+    let paddr = vaddr - VIRT_ADDR_START;
     PageTable::new_from_addr(PhysAddr::from(paddr))
 }
 
@@ -73,6 +77,13 @@ impl PageTable {
         // 复制内核空间的映射（高 256 个条目）
         // 新页表的低 256 个条目（用户空间）保持为空，等待后续映射
         new_entries[256..].copy_from_slice(&boot_entries[256..]);
+
+        // Explicitly clear the User (U) flag from kernel space entries
+        for pte in new_entries[256..].iter_mut() {
+            if *pte != 0 {
+                *pte &= !MappingFlags::USER.bits() as u64;
+            }
+        }
     }
 
 
@@ -102,13 +113,11 @@ impl PageTable {
         }
     }
 
-
     pub fn map_mem_set_user(&mut self, mem_set: MemSet) {
         for mut region in mem_set.regions.into_iter() {
             self.map_region_user(&mut region);
         }
     }
-
 
     pub fn change_pagetable(&self) {
         change_pagetable(self.page_table.root_paddr().as_usize())
@@ -136,7 +145,7 @@ impl PageTable {
     }
 
     pub fn flush() {
-        flush();
+        arch::flush();
     }
 
 
@@ -154,4 +163,17 @@ impl PageTable {
             Err(_) => None,
         }
     }
+}
+
+
+pub fn change_boot_pagetable() {
+    unsafe extern "C"
+    {
+        unsafe fn boot_page_table() -> usize;
+    }
+    let mut paddr = unsafe { boot_page_table() };
+    if paddr >= VIRT_ADDR_START {
+        paddr -= VIRT_ADDR_START;
+    }
+    change_pagetable(paddr);   
 }

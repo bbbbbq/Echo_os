@@ -99,6 +99,11 @@ impl TrapFrame {
     {
         self.sepc = sepc;
     }
+
+    pub fn get_sysno(&self) -> usize
+    {
+        self.x[17]
+    }
 }
 
 impl Index<TrapFrameArgs> for TrapFrame {
