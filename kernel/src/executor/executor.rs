@@ -103,7 +103,7 @@ impl Executor {
             // ****************** test_end ****************** 
             
             task.before_run();
-            info!("task : {:?}", task);
+            // info!("task : {:?}", task);
             let cur_cpu_id = get_cur_cpu_id();
             *self.cores[cur_cpu_id].lock() = Some(task.clone());
             let waker = Arc::new(Waker {

@@ -293,7 +293,7 @@ impl AsyncTask for UserTask {
     }
     
     fn exit_code(&self) -> Option<usize> {
-        unimplemented!()
+        self.tcb.read().thread_exit_code
     }
 }
 pub async fn add_user_task(filename: &str, args: Vec<&str>, envp: Vec<&str>) -> TaskId {

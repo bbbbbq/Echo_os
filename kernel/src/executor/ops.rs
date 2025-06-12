@@ -3,7 +3,7 @@ use core::{
     pin::Pin,
     task::{Context, Poll},
 };
-
+use log::info;
 pub struct Yield(bool);
 
 impl Yield {
@@ -27,5 +27,6 @@ impl Future for Yield {
 }
 
 pub async fn yield_now() {
+    info!("Yielding to other tasks");
     Yield::new().await;
 }
