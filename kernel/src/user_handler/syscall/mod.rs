@@ -6,9 +6,12 @@ use super::handler::UserHandler;
 use super::handler::UserTaskControlFlow;
 pub mod sysnum;
 use crate::executor::error::TaskError;
+use crate::user_handler::syscall::sysnum::SYS_WRITE;
 use log::debug;
 use crate::executor::task::AsyncTask;
-
+use log::error;
+use log::info;
+pub mod fs;
 
 impl UserHandler
 {
@@ -41,7 +44,16 @@ impl UserHandler
             sysnum::SYS_EXIT => {
                unimplemented!()
             }
-            _ => Err(TaskError::Invalid),
+            sysnum::SYS_WRITE => 
+            {
+                self.sys_write(_args[0], _args[1].into(), _args[2]).await
+            }
+            _ => 
+            {
+                info!("call_id : {}", call_id);
+                error!("Invalid syscall");
+                loop{}
+            },
         }
     }
 }

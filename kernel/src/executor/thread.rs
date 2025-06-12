@@ -15,6 +15,7 @@ use elf_ext::LoadElfReturn;
 use filesystem::file;
 use filesystem::file::File;
 use filesystem::path::Path;
+use filesystem::vfs::FileAttr;
 use filesystem::{fd_table::FdTable, vfs::{OpenFlags, VfsError}};
 use frame::{alloc_continues, alloc_frame};
 use heap::HeapUser;
@@ -39,6 +40,7 @@ use crate::executor::task::{AsyncTask, AsyncTaskItem};
 use crate::executor::executor::GLOBLE_EXECUTOR;
 use trap::trapframe::TrapFrameArgs;
 use core::mem::size_of;
+use core::time::Duration;
 use super::error::TaskError;
 use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
@@ -53,6 +55,7 @@ pub struct ProcessControlBlock {
     pub entry: usize,
     pub threads: Vec<UserTask>,
     pub exit_code: Option<usize>,
+    pub time: Option<Duration>
 }
 
 pub struct ThreadControlBlock {
@@ -105,6 +108,7 @@ impl UserTask {
             entry: 0,
             threads: Vec::new(),
             exit_code: None,
+            time: None,
         }));
         let parent = RwLock::new(parent);
         let tcb = RwLock::new(ThreadControlBlock {
@@ -149,7 +153,6 @@ impl UserTask {
             pagetable.map_region_user(region);
             region.is_mapped = true;
         }
-        
         // Initialize task based on load_elf_return information
         let task = Arc::new(Self {
             task_id: alloc_tid(),
@@ -166,6 +169,7 @@ impl UserTask {
                 entry: load_elf_return.entry_point,
                 threads: Vec::new(),
                 exit_code: None,
+                time: None,
             })),
             parent: RwLock::new(parent.unwrap_or_else(|| Weak::new())),
             tcb: RwLock::new(ThreadControlBlock {
@@ -273,6 +277,12 @@ impl UserTask {
     pub fn force_cx_ref(&self) -> &'static mut TrapFrame {
         unsafe { &mut self.tcb.as_mut_ptr().as_mut().unwrap().cx }
     }
+
+        pub fn get_fd(&self,fd:usize) -> Option<File>
+    {
+        self.pcb.lock().fd_table.get(fd).cloned()
+    }
+    
 }
 
 impl AsyncTask for UserTask {

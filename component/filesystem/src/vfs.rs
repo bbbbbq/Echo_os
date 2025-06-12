@@ -19,7 +19,7 @@ pub enum FileType {
     Unknown,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VfsError {
     InvalidPath,
     NotFound,

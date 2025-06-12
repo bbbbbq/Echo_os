@@ -1,15 +1,21 @@
 [workspace]
 members = [ "component/UintAllocator", "component/bitmap", "component/boot", "component/config", 
     "component/console", "component/driver/device", "component/driver/virtio", "component/driver/api", "component/filesystem", "component/frame", 
-    "component/heap", "kernel", "component/arch", "component/mem" , "component/trap", "component/timer", "component/elf_ext"]
+    "component/heap", "kernel", "component/arch", "component/mem" , "component/trap", "component/timer", "component/elf_ext",
+]
 resolver = "2"
 
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
 
 [workspace.dependencies]
 log = { version = "0.4", default-features = false }
 spin = "0.9"
-bitflags = "2.4"
 page_table_multiarch = "0.5.3"
+page_table_entry = "0.5.3"
+
+bitflags = "2.4"
 config ={ path = "component/config" }
 console = { path = "component/console"}
 boot = { path = "component/boot" }
@@ -34,3 +40,4 @@ hashbrown = "0.15.2"
 trap = {path = "component/trap"}
 elf_ext = { path = "component/elf_ext"}
 async-recursion = "1.1.0"
+timer = { path = "component/timer" }

@@ -17,6 +17,7 @@ use xmas_elf::sections::SectionData;
 use xmas_elf::symbol_table::DynEntry64;
 use xmas_elf::symbol_table::Entry;
 use config::riscv64_qemu::plat::USER_DYN_ADDR;
+use log::info;
 
 
 pub trait ElfExt {
@@ -38,15 +39,19 @@ impl ElfExt for ElfFile<'_> {
     }
 
     fn relocate(&self, base: usize) -> Result<usize, &str> {
-        let data = self
-            .find_section_by_name(".rela.dyn")
-            .ok_or(".rela.dyn not found")?
-            .get_data(self)
+        let section = self.find_section_by_name(".rela.dyn")
+            .ok_or(".rela.dyn not found")?;
+        
+        let data = section.get_data(self)
             .map_err(|_| "corrupted .rela.dyn")?;
+        
         let entries = match data {
             SectionData::Rela64(entries) => entries,
             _ => return Err("bad .rela.dyn"),
         };
+        
+        info!("Relocating ELF with {} entries at base 0x{:x}", entries.len(), base);
+        
         let dynsym = self.dynsym()?;
         for entry in entries.iter() {
             const REL_GOT: u32 = 6;
@@ -57,21 +62,34 @@ impl ElfExt for ElfFile<'_> {
             const R_AARCH64_RELATIVE: u32 = 0x403;
             const R_AARCH64_GLOBAL_DATA: u32 = 0x401;
 
-            match entry.get_type() {
+            let entry_type = entry.get_type();
+            info!("Processing relocation entry type: {}", entry_type);
+            
+            match entry_type {
                 REL_GOT | REL_PLT | R_RISCV_64 | R_AARCH64_GLOBAL_DATA => {
-                    let dynsym = &dynsym[entry.get_symbol_table_index() as usize];
-                    if dynsym.shndx() == 0 {
-                        let name = dynsym.get_name(self)?;
+                    let sym_idx = entry.get_symbol_table_index() as usize;
+                    let dynsym_entry = &dynsym[sym_idx];
+                    
+                    if dynsym_entry.shndx() == 0 {
+                        let name = dynsym_entry.get_name(self)?;
+                        info!("Symbol needs resolution: {}", name);
                         panic!("need to find symbol: {:?}", name);
                     } else {
-                        base + dynsym.value() as usize
+                        let resolved_addr = base + dynsym_entry.value() as usize;
+                        info!("Symbol resolved to address: 0x{:x}", resolved_addr);
                     };
                 }
-                REL_RELATIVE | R_RISCV_RELATIVE | R_AARCH64_RELATIVE => {}
-                t => unimplemented!("unknown type: {}", t),
+                REL_RELATIVE | R_RISCV_RELATIVE | R_AARCH64_RELATIVE => {
+                    info!("Processing relative relocation");
+                }
+                t => {
+                    info!("Unknown relocation type: {}", t);
+                    unimplemented!("unknown type: {}", t);
+                }
             }
         }
-        // panic!("STOP");
+        
+        info!("Relocation completed successfully");
         Ok(base)
     }
 }
@@ -239,7 +257,7 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
 
     let base = elf.relocate(USER_DYN_ADDR).unwrap_or(0);
 
-
+    info!("debug base: {}", base);
 
     LoadElfReturn {
         frame_addr,

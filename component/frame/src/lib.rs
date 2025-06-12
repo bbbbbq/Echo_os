@@ -18,13 +18,13 @@ lazy_static! {
         let mut start_addr = _end as usize;
         let mut end_addr = start_addr + FRAME_SIZE;
 
-        if start_addr >= VIRT_ADDR_START {
-            start_addr -= VIRT_ADDR_START;
-        }
+        // if start_addr >= VIRT_ADDR_START {
+        //     start_addr -= VIRT_ADDR_START;
+        // }
 
-        if end_addr >= VIRT_ADDR_START {
-            end_addr -= VIRT_ADDR_START;
-        }
+        // if end_addr >= VIRT_ADDR_START {
+        //     end_addr -= VIRT_ADDR_START;
+        // }
 
         let start_paddr = PhysAddr::from_usize(start_addr);
         let end_paddr = PhysAddr::from_usize(end_addr);
