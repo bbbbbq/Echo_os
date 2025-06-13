@@ -19,3 +19,4 @@ frame = { workspace = true }
 arch = { workspace = true }
 lazy_static = { workspace = true }
 console = { path = "../console" }
+device = { workspace = true }

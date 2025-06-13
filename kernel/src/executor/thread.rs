@@ -121,6 +121,16 @@ impl UserTask {
 
     // elf or other file
     pub async fn new_frome_file(parent: Option<Weak<UserTask>>, path: Path) -> Option<Arc<Self>> {
+        let curr_dir = if let Some(parent_weak) = &parent {
+            if let Some(parent_arc) = parent_weak.upgrade() {
+                parent_arc.pcb.lock().curr_dir.clone()
+            } else {
+                Arc::new(Path::new("/".to_owned()))
+            }
+        } else {
+            Arc::new(Path::new("/".to_owned()))
+        };
+
         let mut load_elf_return = load_elf_frame(path.clone());
         if load_elf_return.entry_point == 0 {
             // Not a valid ELF file
@@ -143,7 +153,7 @@ impl UserTask {
             pcb: Arc::new(Mutex::new(ProcessControlBlock {
                 fd_table: FdTable::new(),
                 mem_set: load_elf_return.memset,
-                curr_dir: Arc::new(path.clone()),
+                curr_dir,
                 heap: HeapUser::new(VirtAddrRange::new(
                     VirtAddr::from_usize(load_elf_return.heap_bottom),
                     VirtAddr::from_usize(load_elf_return.heap_bottom + load_elf_return.heap_size),

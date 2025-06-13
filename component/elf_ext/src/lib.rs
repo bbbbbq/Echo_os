@@ -131,7 +131,7 @@ impl core::fmt::Debug for LoadElfReturn {
 // 把elf文件存储到frame内存中，返回elf文件的地址，ph地址，entry_point，memset
 pub fn load_elf_frame(path: Path) -> LoadElfReturn {
     debug!("Loading ELF file from path: {:?}", path);
-    let file = File::open(path, OpenFlags::O_RDONLY).expect("Failed to open ELF file");
+    let file = File::open(&path.to_string(), OpenFlags::O_RDONLY).expect("Failed to open ELF file");
     let file_size = file.get_file_size().expect("Failed to get file size");
     debug!("ELF file size: {} bytes", file_size);
 
@@ -141,7 +141,7 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
     debug!("Allocated frame at address: 0x{:x}", frame_addr);
 
     let buffer = unsafe { core::slice::from_raw_parts_mut(frame_addr as *mut u8, file_size) };
-    let read_size = file.read_at(buffer).expect("Failed to read ELF file");
+    let read_size = file.read_at(0,buffer).expect("Failed to read ELF file");
     assert_eq!(read_size, file_size);
 
     debug!(

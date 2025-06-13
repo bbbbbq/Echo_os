@@ -39,7 +39,7 @@ fn panic(info: &PanicInfo) -> ! {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
-    console::init();
+    //console::init();
     unsafe {
         info!("boot_page_table: {:x}", boot_page_table());
     }
@@ -63,11 +63,11 @@ pub fn test_file() {
     let path = Path::new("/hello.txt".to_string());
     let flags = OpenFlags::O_RDONLY;
 
-    match File::open(path, flags) {
+    match File::open(&path.to_string(), flags) {
         Ok(_file) => {
             info!("Successfully opened /hello.txt");
             let mut buffer = [0u8; 64]; // Buffer to read file content
-            match _file.read_at(&mut buffer) {
+            match _file.read_at(0, &mut buffer) {
                 Ok(bytes_read) => {
                     if bytes_read > 0 {
                         // Attempt to convert the read bytes to a UTF-8 string

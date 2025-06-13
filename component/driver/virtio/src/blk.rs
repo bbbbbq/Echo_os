@@ -8,10 +8,10 @@ use driver_api::{BlockDriver, DeviceType, Driver};
 use spin::Mutex;
 use virtio_drivers::device::blk::VirtIOBlk;
 use virtio_drivers::transport::Transport;
-use virtio_drivers::transport::mmio::{MmioTransport, VirtIOHeader};
+use virtio_drivers::transport::mmio::MmioTransport;
 #[macro_use]
 use uint_allocator::create_uint_allocator;
-use device_set::DEVICE_SET; // Renamed in Cargo.toml for virtio crate
+ // Renamed in Cargo.toml for virtio crate
 use device_set::push_device; // Renamed in Cargo.toml for virtio crate
 use log::{info, trace};
 

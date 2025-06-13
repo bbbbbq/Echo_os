@@ -1,15 +1,15 @@
 use super::handler::UserHandler;
 use super::handler::UserTaskControlFlow;
 use trap::trap::EscapeReason;
-use trap::trapframe::{TrapFrame, TrapFrameArgs};
 use trap::trap::run_user_task;
+use trap::trapframe::{TrapFrame, TrapFrameArgs};
 pub mod sysnum;
 use crate::executor::error::TaskError;
 use crate::executor::task::AsyncTask;
 
+use crate::user_handler::userbuf::UserBuf;
 use log::error;
 use log::info;
-use crate::user_handler::userbuf::UserBuf;
 
 pub mod fs;
 pub mod mem;
@@ -46,7 +46,6 @@ impl UserHandler {
         UserTaskControlFlow::Continue
     }
 
-
     pub async fn syscall(&mut self, call_id: usize, _args: [usize; 6]) -> Result<usize, TaskError> {
         info!("[syscall] id: {}, args: {:?}", call_id, _args);
         match call_id {
@@ -58,17 +57,34 @@ impl UserHandler {
                 let dirfd = _args[0] as isize;
                 let path = UserBuf::new(_args[1] as *mut u8);
                 let mode = _args[2];
-                self.sys_mkdirat(dirfd, path.get_cstr(), mode).await
-            },
+                self.sys_mkdirat(dirfd, &path.read_string(), mode).await
+            }
             sysnum::SYS_CHDIR => {
                 let path = UserBuf::new(_args[0] as *mut u8);
-                self.sys_chdir(path.get_cstr()).await
-            },
+                self.sys_chdir(&path.read_string()).await
+            }
+            sysnum::SYS_OPENAT => {
+                let dir_fd = _args[0] as isize;
+                let path = UserBuf::new(_args[1] as *mut u8);
+                let flags = _args[2];
+                let mode = _args[3];
+                self.sys_openat(dir_fd, &path.read_string(), flags, mode)
+                    .await
+            }
             sysnum::SYS_GETCWD => {
                 let buf_ptr = _args[0].into();
                 let size = _args[1];
                 self.sys_getcwd(buf_ptr, size).await
-            },
+            }
+            sysnum::SYS_DUP => {
+                let oldfd = _args[0];
+                self.sys_dup(oldfd).await
+            }
+            sysnum::SYS_DUP3 => {
+                let oldfd = _args[0];
+                let newfd = _args[1];
+                self.sys_dup3(oldfd, newfd).await
+            }
             _ => {
                 info!("call_id : {}", call_id);
                 error!("Invalid syscall");

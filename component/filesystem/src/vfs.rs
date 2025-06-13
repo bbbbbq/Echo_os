@@ -75,6 +75,12 @@ impl core::ops::BitOr for OpenFlags {
 }
 
 impl OpenFlags {
+    pub fn new_read_write() -> Self
+    {
+        let inner: u32 = Self::O_RDONLY.0 | Self::O_WRONLY.0;
+        Self(inner)
+    }
+
     pub fn is_readable(&self) -> bool {
         let mode = self.0 & 0o3;
         mode == Self::O_RDONLY.0 || mode == Self::O_RDWR.0
@@ -87,6 +93,10 @@ impl OpenFlags {
 
     pub fn contains(&self, flags: OpenFlags) -> bool {
         (self.0 & flags.0) == flags.0
+    }
+
+    pub fn from_bits_truncate(bits: u32) -> Self {
+        Self(bits)
     }
 }
 

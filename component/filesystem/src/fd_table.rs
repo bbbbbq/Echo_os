@@ -52,4 +52,19 @@ impl FdTable {
             file.flush().unwrap();
         }
     }
+
+    pub fn alloc(&mut self, file: File) -> usize {
+        let fd = (3..).find(|fd| self.table.get(fd).is_none()).unwrap();
+        self.table.insert(fd, file);
+        fd
+    }
+
+    pub fn set(&mut self, fd: usize, file: File) {
+        self.table.insert(fd, file);
+    }
+
+    pub fn alloc_id(&mut self) -> usize {
+        let fd = (3..).find(|fd| self.table.get(fd).is_none()).unwrap();
+        fd
+    }
 }

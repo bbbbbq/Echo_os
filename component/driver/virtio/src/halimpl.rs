@@ -1,9 +1,9 @@
 use core::ptr::NonNull;
-use frame::{FrameTracer, alloc_continues, alloc_frame, dealloc_continues, dealloc_frame};
+use frame::{FrameTracer, alloc_continues, dealloc_continues};
 use spin::Mutex;
 extern crate alloc;
 use alloc::vec::Vec;
-use config::target::plat::{FRAME_SIZE, PAGE_SIZE, VIRT_ADDR_START};
+use config::target::plat::VIRT_ADDR_START;
 use memory_addr;
 use virtio_drivers::{BufferDirection, Hal, PhysAddr};
 static VIRTIO_CONTAINER: Mutex<Vec<FrameTracer>> = Mutex::new(Vec::new());

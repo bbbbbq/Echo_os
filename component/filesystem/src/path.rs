@@ -22,12 +22,18 @@ impl Path {
 
     pub fn get_name(&self) -> String {
         if self.inner.is_empty() {
-            String::new()
+            "".to_string()
         } else {
-            self.inner.last().unwrap().clone()
+            self.inner.last().unwrap().to_string()
         }
     }
 
+    pub fn parent(&self) -> String {
+        let mut inner = self.inner.clone();
+        inner.pop();
+        Path { inner }.to_string()
+    }
+    
     pub fn to_string(&self) -> String {
         if self.inner.is_empty() {
             return "/".to_string();
@@ -37,6 +43,11 @@ impl Path {
         s
     }
 
+    pub fn join(&self, path: &str) -> Path {
+        let mut inner = self.inner.clone();
+        inner.push(path.to_string());
+        Path { inner }
+    }
 }
 
 impl From<&str> for Path {

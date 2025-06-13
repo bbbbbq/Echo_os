@@ -376,23 +376,30 @@ impl Ext4FileWrapper {
     fn create(&self, path: &str, ty: InodeTypes) -> Result<usize, i32> {
         info!("create {:?} on Ext4fs: {}", ty, path);
         let fpath = self.path_deal_with(path);
-        let fpath = fpath.as_str();
-        if fpath.is_empty() {
+        let fpath_str = fpath.as_str();
+        if fpath_str.is_empty() {
             return Ok(0);
         }
 
         let types = ty;
 
-        let mut file = self.inner.lock();
-        if file.check_inode_exist(fpath, types.clone()) {
-            Ok(0)
+        // Use the parent directory handle only to check for existence.
+        if self.inner.lock().check_inode_exist(fpath_str, types.clone()) {
+            return Ok(0);
+        }
+
+        // Clone the handle to operate on, to avoid corrupting the parent directory's handle.
+        let mut temp_handle = self.inner.lock();
+
+        if types == InodeTypes::EXT4_DE_DIR {
+            temp_handle.dir_mk(fpath_str)
         } else {
-            if types == InodeTypes::EXT4_DE_DIR {
-                file.dir_mk(fpath)
+            let res = temp_handle.file_open(fpath_str, O_WRONLY | O_CREAT | O_TRUNC);
+            if res.is_ok() {
+                // The handle is now open to the new file. We must close it.
+                temp_handle.file_close()
             } else {
-                file.file_open(fpath, O_WRONLY | O_CREAT | O_TRUNC)
-                    .expect("create file failed");
-                file.file_close()
+                res
             }
         }
     }

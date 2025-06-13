@@ -14,9 +14,18 @@ use log::info;
 use memory_addr::{MemoryAddr, PhysAddr, VirtAddr};
 use page_table_multiarch::{GenericPTE, MappingFlags, PagingHandler, riscv::Sv39PageTable};
 use page_table_entry::riscv::Rv64PTE;
+use memory_addr::AddrRange;
+use alloc::borrow::ToOwned;
+use config::target::plat::FRAME_SIZE;
+use crate::memregion::MemRegionType;
+// Removed duplicate import of MemRegion
+use frame::get_frame_start_end;
+use log::debug;
+use device::get_mmio_start_end;
 
 unsafe extern "C" {
     fn boot_page_table() -> usize;
+    fn _end();
 }
 
 pub fn get_boot_page_table() -> PageTable {
@@ -64,9 +73,9 @@ impl PageTable {
     pub fn restore(&mut self) {
         self.release();
         let mut paddr = unsafe { boot_page_table() };
-        if paddr >= VIRT_ADDR_START {
-            paddr -= VIRT_ADDR_START;
-        }
+        // if paddr >= VIRT_ADDR_START {
+        //     paddr -= VIRT_ADDR_START;
+        // }
         let boot_pte_arrary = paddr as *mut [u64; 512];
         let current_pte_arrary = self.page_table.root_paddr().as_usize() as *mut [u64; 512];
         unsafe {
@@ -75,6 +84,32 @@ impl PageTable {
                 (*current_pte_arrary)[i] = 0;
             }
         }
+        
+        let (start_addr,end_addr) = get_frame_start_end();
+        debug!("start_addr: {:x}, end_addr: {:x}", start_addr, end_addr);
+        let mut mem_region = MemRegion {
+            name: "elf_segment".to_owned(),
+            vaddr_range: AddrRange::new(VirtAddr::from_usize(start_addr), VirtAddr::from_usize(end_addr)),
+            paddr_range: Some(AddrRange::new(PhysAddr::from_usize(start_addr), PhysAddr::from_usize(end_addr))),
+            pte_flags: MappingFlags::READ | MappingFlags::WRITE,
+            region_type: MemRegionType::DATA,
+            is_mapped: false,
+        };
+        self.map_region_user(&mut mem_region);
+
+        let (mmio_start,mmio_end) = get_mmio_start_end();
+        debug!("mmio_start: {:x}, mmio_end: {:x}", mmio_start, mmio_end);
+        let mut mem_region = MemRegion {
+            name: "mmio_segment".to_owned(),
+            vaddr_range: AddrRange::new(VirtAddr::from_usize(mmio_start), VirtAddr::from_usize(mmio_end)),
+            paddr_range: Some(AddrRange::new(PhysAddr::from_usize(mmio_start), PhysAddr::from_usize(mmio_end))),
+            pte_flags: MappingFlags::READ | MappingFlags::WRITE,
+            region_type: MemRegionType::DATA,
+            is_mapped: false,
+        };
+        self.map_region_user(&mut mem_region);
+
+
     }
 
     pub fn release(&mut self) {
@@ -122,6 +157,7 @@ impl PageTable {
     }
 
     pub fn map_region_user(&mut self, region: &mut MemRegion) {
+        info!("region : {:?}",region);
         if let Some(paddr_range) = region.paddr_range {
             let start_vaddr = region.vaddr_range.start;
             let size = region.vaddr_range.size();

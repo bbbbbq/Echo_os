@@ -26,7 +26,6 @@ async fn command(cmd: &str) {
             let task_id = add_user_task(&filename, args_extend, Vec::new()).await;
             info!("Task created with ID: {:?}", task_id);
             let task = tid2task(task_id).unwrap();
-            // yield_now().await;
             loop {
                 if task.exit_code().is_some() {
                     release_task(task_id);
@@ -71,7 +70,7 @@ pub async fn initproc() {
     // command("busybox sh init.sh").await;
     // command("busybox ls -l /bin").await;
 
-    command("chdir").await;
+    command("clone").await;
     // command("busybox echo run lua_testcode.sh").await;
     // command("busybox sh lua_testcode.sh").await;
 

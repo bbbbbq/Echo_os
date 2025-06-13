@@ -2,9 +2,11 @@ use filesystem::vfs::VfsError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskError {
-    NotFound,
+    EPERM,
     Invalid,
     EINVAL,
+    EBADF,
+    EMFILE,
     Vfs(VfsError),
 }
 
@@ -17,18 +19,22 @@ impl From<VfsError> for TaskError {
 impl TaskError {
     pub fn as_str(&self) -> &str {
         match self {
-            TaskError::NotFound => "NotFound",
+            TaskError::EBADF => "Bad file descriptor",
+            TaskError::EPERM => "Operation not permitted",
             TaskError::Invalid => "Invalid",
             TaskError::EINVAL => "Invalid argument",
+            TaskError::EMFILE => "Too many open files",
             TaskError::Vfs(_) => "VfsError",
         }
     }
 
     pub fn into_raw(self) -> isize {
         match self {
-            TaskError::NotFound => 1,  // EPERM
+            TaskError::EMFILE => 24, // EMFILE
+            TaskError::EPERM => 1,  // EPERM
             TaskError::Invalid => 22, // EINVAL
             TaskError::EINVAL => 22, // EINVAL
+            TaskError::EBADF => 9, // EBADF
             TaskError::Vfs(_) => 2, // ENOENT
         }
     }

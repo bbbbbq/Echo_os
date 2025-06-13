@@ -68,9 +68,14 @@ impl FrameAllocator {
         // Calculate frame count based on aligned start address
         let frame_count = (end.as_usize() - start.as_usize()) / PAGE_SIZE;
         let bitmap = Bitmap::new(frame_count);
-
+        let end = start + frame_count * PAGE_SIZE;
         info!("FrameAllocator: start={:?}, end={:?}, frame_count={}", start, end, frame_count);
         Self { start, end, bitmap }
+    }
+
+    pub fn get_start_end(&self) -> (usize,usize)
+    {
+        (self.start.as_usize(), self.end.as_usize())
     }
 
     pub fn alloc(&mut self) -> Option<FrameTracer> {
@@ -163,6 +168,11 @@ pub fn is_continues_allocated(base: usize, count: usize) -> bool {
         }
     }
     true
+}
+
+pub fn get_frame_start_end() -> (usize,usize)
+{
+    FRAME_ALLOCATOR.lock().get_start_end()
 }
 
 /// Tests if frames allocated by alloc_continues are properly 4K-aligned

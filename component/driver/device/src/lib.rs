@@ -63,3 +63,9 @@ pub fn virtio_device(transport: impl Transport + Send + Sync + 'static) {
         t => warn!("Unrecognized virtio device: {:?}", t),
     }
 }
+
+pub fn get_mmio_start_end() -> (usize, usize) {
+    let start = 0x10000000;
+    let end = 0x1000f000;
+    (start, end)
+}
