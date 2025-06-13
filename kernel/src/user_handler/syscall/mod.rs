@@ -7,7 +7,6 @@ use super::handler::UserTaskControlFlow;
 pub mod sysnum;
 use crate::executor::error::TaskError;
 use crate::user_handler::syscall::sysnum::SYS_WRITE;
-use log::debug;
 use crate::executor::task::AsyncTask;
 use log::error;
 use log::info;
@@ -27,7 +26,7 @@ impl UserHandler
             .map_or_else(|e| -e.into_raw() as isize, |x| x as isize)
             as usize;
 
-            debug!(
+            info!(
                 "[task {:?}] syscall result: {}",
                 self.task.get_task_id(),
                 result as isize
@@ -40,6 +39,7 @@ impl UserHandler
 
     
     pub async fn syscall(&self, call_id: usize, _args: [usize; 6]) -> Result<usize, TaskError> {
+        info!("[syscall] id: {}, args: {:?}", call_id, _args);
         match call_id {
             sysnum::SYS_EXIT => {
                unimplemented!()
