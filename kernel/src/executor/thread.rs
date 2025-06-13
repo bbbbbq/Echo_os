@@ -44,7 +44,7 @@ use core::time::Duration;
 use super::error::TaskError;
 use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
-
+use crate::executor::executor::release_task;
 
 
 pub struct ProcessControlBlock {
@@ -67,7 +67,7 @@ pub struct ThreadControlBlock {
 pub struct UserTask {
     pub task_id: TaskId,
     pub process_id: TaskId,
-    pub page_table: Arc<PageTable>,
+    pub page_table: Arc<Mutex<PageTable>>,
     pub pcb: Arc<Mutex<ProcessControlBlock>>,
     pub parent: RwLock<Weak<UserTask>>,
     pub tcb: RwLock<ThreadControlBlock>,
@@ -96,7 +96,7 @@ impl UserTask {
     pub fn new(parent: Weak<UserTask>, work_dir: Path) -> Arc<Self> {
         let task_id = TaskId(0);
         let process_id = TaskId(0);
-        let page_table = Arc::new(PageTable::new());
+        let page_table = Arc::new(Mutex::new(PageTable::new()));
         let pcb = Arc::new(Mutex::new(ProcessControlBlock {
             fd_table: FdTable::new(),
             mem_set: MemSet::new(),
@@ -157,7 +157,7 @@ impl UserTask {
         let task = Arc::new(Self {
             task_id: alloc_tid(),
             process_id: alloc_tid(),
-            page_table: Arc::new(pagetable),
+            page_table: Arc::new(Mutex::new(pagetable)),
             pcb: Arc::new(Mutex::new(ProcessControlBlock {
                 fd_table: FdTable::new(),
                 mem_set: load_elf_return.memset,
@@ -278,16 +278,42 @@ impl UserTask {
         unsafe { &mut self.tcb.as_mut_ptr().as_mut().unwrap().cx }
     }
 
-        pub fn get_fd(&self,fd:usize) -> Option<File>
+    pub fn get_fd(&self,fd:usize) -> Option<File>
     {
         self.pcb.lock().fd_table.get(fd).cloned()
     }
-    
+
+    pub fn get_heap(&self) -> HeapUser {
+        self.pcb.lock().heap.clone()
+    }
+
+    pub fn set_heap(&self,heap:HeapUser)
+    {
+        self.pcb.lock().heap = heap;
+    }
+
+    pub fn release(&self) {
+        // Ensure that the task was exited successfully.
+        assert!(self.exit_code().is_some() || self.tcb.read().thread_exit_code.is_some());
+        release_task(self.task_id);
+    }
+
+    pub fn thread_exit(&self,exit_code:usize)
+    {
+        self.tcb.write().thread_exit_code = Some(exit_code);
+        if self.task_id != self.process_id {
+            self.pcb
+                .lock()
+                .threads
+                .retain(|x| x.task_id != self.task_id);
+            self.release();
+        }
+    }
 }
 
 impl AsyncTask for UserTask {
     fn before_run(&self) {
-        self.page_table.change_pagetable();
+        self.page_table.lock().change_pagetable();
     }
 
     fn get_task_id(&self) -> TaskId {

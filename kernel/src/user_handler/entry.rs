@@ -7,6 +7,7 @@ use alloc::boxed::Box;
 use async_recursion::async_recursion;
 use log::info;
 use log::warn;
+use riscv::register::{scause, sstatus};
 use trap::trapframe::TrapFrame;
 use log::debug;
 use crate::user_handler::handler::UserTaskControlFlow;
@@ -28,9 +29,9 @@ impl UserHandler {
         loop {
             self.check_timer();
 
-            let res = self.handle_syscall(cx_ref);
+            let res = self.handle_syscall(cx_ref).await;
 
-            if let UserTaskControlFlow::Break = res.await {
+            if let UserTaskControlFlow::Break = res {
                 break;
             }
 

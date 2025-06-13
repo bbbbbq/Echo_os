@@ -3,13 +3,13 @@
 extern crate alloc;
 
 use alloc::string::ToString;
-
+use config::riscv64_qemu::plat::PAGE_SIZE;
 use buddy_system_allocator::LockedHeap;
 use config::target::plat::HEAP_SIZE;
 use core::ptr;
 use log::info;
 use mem::memregion::{MemRegion, MemRegionType};
-
+use mem::pagetable::PageTable;
 use memory_addr::MemoryAddr;
 use memory_addr::VirtAddrRange;
 use page_table_multiarch::MappingFlags;
@@ -47,8 +47,9 @@ pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
 }
 
 #[derive(Debug)]
+#[derive(Clone, Copy)]
 pub struct HeapUser {
-    virt_range: VirtAddrRange,
+    pub virt_range: VirtAddrRange,
 }
 
 impl HeapUser {
@@ -73,5 +74,25 @@ impl HeapUser {
             "user_heap".to_string(),
             MemRegionType::HEAP,
         )
+    }
+
+    pub fn get_end(&self) -> usize {
+        self.virt_range.end.as_usize()
+    }
+
+    pub fn sbrk(&mut self, increment: usize,pagetable:&mut PageTable) -> usize{
+        let pages = increment.div_ceil(PAGE_SIZE.try_into().unwrap());
+        let new_end = self.virt_range.end.add(pages * PAGE_SIZE);
+        let old_end = self.virt_range.end;
+        let mut new_region = MemRegion::new_anonymous(
+            old_end,
+            new_end,
+            MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE,
+            "user_heap_sbrk".to_string(),
+            MemRegionType::HEAP,
+        );
+        pagetable.map_region_user_frame(&mut new_region);
+        self.virt_range.end = new_end;
+        new_end.as_usize()
     }
 }

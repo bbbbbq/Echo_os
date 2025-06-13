@@ -73,7 +73,7 @@ pub async fn initproc() {
     // command("busybox sh init.sh").await;
     // command("busybox ls -l /bin").await;
 
-    command("chdir").await;
+    command("brk").await;
     // command("busybox echo run lua_testcode.sh").await;
     // command("busybox sh lua_testcode.sh").await;
 

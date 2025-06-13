@@ -22,8 +22,8 @@ pub fn init() {
         stvec::write(stvec);
     }
 
-    // Initialize the timer component
-    timer::init();
+    // // Initialize the timer component
+    // timer::init();
 }
 
 // 内核中断回调

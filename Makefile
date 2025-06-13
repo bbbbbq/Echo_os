@@ -55,7 +55,7 @@ rundbg: kernel fs-img
 
 # 在 QEMU 中调试
 .PHONY: debug
-debug: kernel fs-img
+debug: kernel
 	@echo "\n=== 在 QEMU 中调试 ==="
 	$(QEMU) $(QEMU_ARGS) -kernel $(KERNEL_BIN) $(QEMU_DRIVE) -s -S
 

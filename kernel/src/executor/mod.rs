@@ -13,10 +13,7 @@ pub mod ops;
 pub unsafe extern "Rust" fn _interrupt_for_arch(ctx: &mut TrapFrame, trap_type: TrapType, _: usize) {
     warn!("Interrupt: {:?}", trap_type);
     match trap_type {
-        TrapType::SysCall => {
-            ctx.sepc += 4;
-            warn!("Syscall not implemented");
-        }
+        TrapType::SysCall => {}
         TrapType::Timer => {
             warn!("Timer interrupt received");
         }
