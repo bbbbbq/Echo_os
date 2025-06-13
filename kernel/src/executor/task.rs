@@ -1,5 +1,5 @@
 use crate::executor::id_alloc::{alloc_tid, dealloc_tid, TaskId};
-use mem::pagetable::{change_boot_pagetable, get_boot_page_table};
+use mem::pagetable::change_boot_pagetable;
 use alloc::sync::Arc;
 use alloc::boxed::Box;
 use core::pin::Pin;

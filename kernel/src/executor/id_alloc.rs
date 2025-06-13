@@ -1,6 +1,4 @@
 use uint_allocator::create_uint_allocator;
-use spin::Mutex;
-use lazy_static::*;
 
 
 create_uint_allocator!(TaskIdAllocator,0,0x1000);

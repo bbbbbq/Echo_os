@@ -1,13 +1,10 @@
 use super::handler::UserHandler;
 use crate::executor::executor::get_cur_usr_task;
-use crate::executor::ops::yield_now;
 use crate::executor::task::AsyncTask;
-use crate::executor::thread::UserTask;
 use alloc::boxed::Box;
 use async_recursion::async_recursion;
 use log::info;
 use log::warn;
-use riscv::register::{scause, sstatus};
 use trap::trapframe::TrapFrame;
 use log::debug;
 use crate::user_handler::handler::UserTaskControlFlow;

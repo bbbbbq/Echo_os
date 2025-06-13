@@ -13,11 +13,6 @@ impl UserHandler
         Ok(file.write_at(buffer)?)
     }
 
-    pub async fn chdir(&mut self, path: &str) -> Result<usize, TaskError> {
-        self.task.pcb.lock().curr_dir = Path::new(path.to_string()).into();
-        Ok(0)
-    }
-
     pub async fn sys_mkdirat(&mut self, dirfd: isize, path: &str, mode: usize) -> Result<usize, TaskError> {
         debug!(
             "sys_mkdirat @ dirfd: {}, path: {}, mode: {}",
@@ -29,9 +24,31 @@ impl UserHandler
         dir.mkdir_at(path)?;
         Ok(0)
     }
-    
+
     pub async fn sys_close(&mut self, fd: usize) -> Result<usize, TaskError> {
         self.task.pcb.lock().fd_table.close(fd);
         Ok(0)
+    }
+
+    pub async fn sys_chdir(&mut self, path: &str) -> Result<usize, TaskError> {
+        self.task.pcb.lock().curr_dir = Path::new(path.to_string()).into();
+        Ok(0)
+    }
+
+    pub async fn sys_getcwd(&mut self, buf_ptr: VirtAddr, size: usize) -> Result<usize, TaskError> {
+        let buffer = unsafe { core::slice::from_raw_parts_mut(buf_ptr.as_mut_ptr(), size) };
+        let cwd_path = self.task.pcb.lock().curr_dir.to_string();
+        let cwd_bytes = cwd_path.as_bytes();
+
+        if cwd_bytes.len() + 1 > size {
+            // Not enough space in user buffer, including null terminator.
+            return Err(TaskError::EINVAL);
+        }
+
+        let copy_len = cwd_bytes.len();
+        buffer[..copy_len].copy_from_slice(cwd_bytes);
+        buffer[copy_len] = 0; // Null terminate the string.
+
+        Ok(copy_len + 1)
     }
 }

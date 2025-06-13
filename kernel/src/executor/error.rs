@@ -3,7 +3,8 @@ use filesystem::vfs::VfsError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskError {
     NotFound,
-    Invalid, 
+    Invalid,
+    EINVAL,
     Vfs(VfsError),
 }
 
@@ -18,7 +19,8 @@ impl TaskError {
         match self {
             TaskError::NotFound => "NotFound",
             TaskError::Invalid => "Invalid",
-            TaskError::Vfs(_) => "VfsError", 
+            TaskError::EINVAL => "Invalid argument",
+            TaskError::Vfs(_) => "VfsError",
         }
     }
 
@@ -26,6 +28,7 @@ impl TaskError {
         match self {
             TaskError::NotFound => 1,  // EPERM
             TaskError::Invalid => 22, // EINVAL
+            TaskError::EINVAL => 22, // EINVAL
             TaskError::Vfs(_) => 2, // ENOENT
         }
     }

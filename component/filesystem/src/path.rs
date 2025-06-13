@@ -36,6 +36,7 @@ impl Path {
         s.push_str(&self.inner.join("/"));
         s
     }
+
 }
 
 impl From<&str> for Path {

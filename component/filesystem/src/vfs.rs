@@ -105,28 +105,28 @@ pub struct DirEntry {
 }
 
 pub trait Inode: DowncastSync + Send + Sync + core::fmt::Debug {
-    fn read_at(&self, _offset: usize, buf: &mut [u8]) -> VfsResult<usize> {
+    fn read_at(&self, _offset: usize, _buf: &mut [u8]) -> VfsResult<usize> {
         unimplemented!()
     }
-    fn write_at(&self, _offset: usize, buf: &[u8]) -> VfsResult<usize> {
+    fn write_at(&self, _offset: usize, _buf: &[u8]) -> VfsResult<usize> {
         unimplemented!()
     }
-    fn mkdir_at(&self, name: &str) -> VfsResult<()> {
+    fn mkdir_at(&self, _name: &str) -> VfsResult<()> {
         unimplemented!()
     }
-    fn rm_dir(&self, name: &str) -> VfsResult<()> {
+    fn rm_dir(&self, _name: &str) -> VfsResult<()> {
         unimplemented!()
     }
-    fn rm_file(&self, name: &str) -> VfsResult<()> {
+    fn rm_file(&self, _name: &str) -> VfsResult<()> {
         unimplemented!()
     }
-    fn lookup(&self, name: &str) -> VfsResult<Arc<dyn Inode>> {
+    fn lookup(&self, _name: &str) -> VfsResult<Arc<dyn Inode>> {
         unimplemented!()
     }
     fn read_dir(&self) -> VfsResult<Vec<DirEntry>> {
         unimplemented!()
     }
-    fn create_file(&self, name: &str) -> VfsResult<()> {
+    fn create_file(&self, _name: &str) -> VfsResult<()> {
         unimplemented!()
     }
     fn truncate(&self, _size: usize) -> VfsResult<()> {
@@ -135,10 +135,10 @@ pub trait Inode: DowncastSync + Send + Sync + core::fmt::Debug {
     fn flush(&self) -> VfsResult<()> {
         unimplemented!()
     }
-    fn rename(&self, name: &str) -> VfsResult<()> {
+    fn rename(&self, _name: &str) -> VfsResult<()> {
         unimplemented!()
     }
-    fn mount(&self, fs: Arc<dyn FileSystem>, path: Path) -> VfsResult<()> {
+    fn mount(&self, _fs: Arc<dyn FileSystem>, _path: Path) -> VfsResult<()> {
         unimplemented!()
     }
     fn umount(&self) -> VfsResult<()> {

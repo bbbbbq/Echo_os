@@ -150,9 +150,9 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
     );
     let elf = ElfFile::new(buffer).expect("Failed to parse ELF file");
     let ph_addr = frame_addr + elf.header.pt2.ph_offset() as usize;
-    let ph_count = elf.header.pt2.ph_count() as usize;
+    let _ph_count = elf.header.pt2.ph_count() as usize;
     let ph_entry_size = elf.header.pt2.ph_entry_size() as usize;
-    let entry_point = elf.header.pt2.entry_point() as usize;
+    let _entry_point = elf.header.pt2.entry_point() as usize;
 
     // 获取要映射的内存区域
     let mut memset = MemSet::new();

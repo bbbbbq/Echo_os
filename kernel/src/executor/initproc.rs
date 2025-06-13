@@ -4,8 +4,6 @@ use crate::executor::executor::{release_task, TASK_MAP, tid2task};
 use alloc::vec::Vec;
 use filesystem::vfs::OpenFlags;
 use filesystem::file::File;
-use crate::executor::id_alloc::alloc_tid;
-use alloc::boxed::Box;
 use console::println;
 use log::info;
 use log::debug;

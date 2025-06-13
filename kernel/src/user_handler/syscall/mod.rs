@@ -6,10 +6,11 @@ use trap::trap::run_user_task;
 pub mod sysnum;
 use crate::executor::error::TaskError;
 use crate::executor::task::AsyncTask;
-use crate::user_handler::syscall::sysnum::SYS_WRITE;
-use memory_addr::VirtAddr;
+
 use log::error;
 use log::info;
+use crate::user_handler::userbuf::UserBuf;
+
 pub mod fs;
 pub mod mem;
 pub mod proc;
@@ -52,8 +53,22 @@ impl UserHandler {
             sysnum::SYS_EXIT => self.sys_exit(_args[0].try_into().unwrap()).await,
             sysnum::SYS_BRK => self.sys_brk(_args[0]).await,
             sysnum::SYS_WRITE => self.sys_write(_args[0], _args[1].into(), _args[2]).await,
-            sysnum::SYS_CLONE => self.sys_clone(_args[0], _args[1], _args[2], _args[3], _args[4], _args[5]).await,
-            
+            sysnum::SYS_CLOSE => self.sys_close(_args[0]).await,
+            sysnum::SYS_MKDIRAT => {
+                let dirfd = _args[0] as isize;
+                let path = UserBuf::new(_args[1] as *mut u8);
+                let mode = _args[2];
+                self.sys_mkdirat(dirfd, path.get_cstr(), mode).await
+            },
+            sysnum::SYS_CHDIR => {
+                let path = UserBuf::new(_args[0] as *mut u8);
+                self.sys_chdir(path.get_cstr()).await
+            },
+            sysnum::SYS_GETCWD => {
+                let buf_ptr = _args[0].into();
+                let size = _args[1];
+                self.sys_getcwd(buf_ptr, size).await
+            },
             _ => {
                 info!("call_id : {}", call_id);
                 error!("Invalid syscall");

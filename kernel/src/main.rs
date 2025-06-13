@@ -1,6 +1,5 @@
 #![no_std]
 #![no_main]
-use alloc::vec;
 use console::println;
 use core::panic::PanicInfo;
 use device::init_dt;
@@ -17,9 +16,8 @@ extern crate alloc;
 pub mod executor;
 use crate::alloc::string::ToString;
 use boot;
-use executor::thread::UserTask;
 pub mod user_handler;
-use crate::executor::executor::{GLOBLE_EXECUTOR, TASK_QUEUE, info_task_queue, spawn_blank};
+use crate::executor::executor::{GLOBLE_EXECUTOR, info_task_queue, spawn_blank};
 use crate::executor::initproc::initproc;
 use boot::boot_page_table;
 use arch::os_shut_down;

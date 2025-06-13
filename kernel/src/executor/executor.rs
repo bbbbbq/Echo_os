@@ -5,8 +5,6 @@ use arch::{get_cpu_num, get_cur_cpu_id};
 use log::info;
 use core::sync::atomic::AtomicBool;
 use spin::Mutex;
-use memory_addr::VirtAddr;
-use crate::executor::id_alloc;
 use crate::executor::id_alloc::TaskId;
 use crate::executor::thread::UserTask;
 use alloc::collections::{BTreeMap, VecDeque};
@@ -14,11 +12,8 @@ use alloc::task::Wake;
 use core::task::Context;
 use core::task::Poll;
 use lazy_static::*;
-use downcast_rs::DowncastSync;
-use crate::executor::id_alloc::alloc_tid;
 use alloc::boxed::Box;
 use crate::executor::task::KernelTask;
-use log::error;
 /// Global task queue
 pub(crate) static TASK_QUEUE: Mutex<VecDeque<AsyncTaskItem>> = Mutex::new(VecDeque::new());
 

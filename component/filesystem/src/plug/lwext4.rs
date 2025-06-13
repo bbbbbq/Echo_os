@@ -46,7 +46,7 @@ fn try_get_block_driver(dev_id: usize) -> Result<Arc<dyn BlockDriver>, String> {
 }
 
 pub struct Ext4DiskWrapper {
-    id: usize,
+    _id: usize,
     offset: usize,
     block_id: usize,
     dev_id: usize,
@@ -55,7 +55,7 @@ pub struct Ext4DiskWrapper {
 impl Ext4DiskWrapper {
     pub fn new(id: usize) -> Self {
         Self {
-            id: id,
+            _id: id,
             offset: 0,
             block_id: 0,
             dev_id: id,
@@ -257,13 +257,13 @@ impl KernelDevOp for Ext4DiskWrapper {
         Ok(new_pos)
     }
 
-    fn flush(dev: &mut Self::DevType) -> Result<usize, i32> {
+    fn flush(_dev: &mut Self::DevType) -> Result<usize, i32> {
         unimplemented!();
     }
 }
 
 pub struct Ext4FileSystemWrapper {
-    inner: Ext4BlockWrapper<Ext4DiskWrapper>,
+    _inner: Ext4BlockWrapper<Ext4DiskWrapper>,
     root: Arc<dyn Inode>,
 }
 
@@ -278,7 +278,7 @@ impl Ext4FileSystemWrapper {
             Err(e) => return Err(e),
         };
         let root = Arc::new(Ext4FileWrapper::new("/", InodeTypes::EXT4_DE_DIR));
-        Ok(Arc::new(Self { inner, root }))
+        Ok(Arc::new(Self { _inner: inner, root }))
     }
 }
 

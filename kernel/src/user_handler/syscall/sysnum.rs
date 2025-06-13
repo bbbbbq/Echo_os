@@ -15,6 +15,7 @@ pub const SYS_FSTATFS: usize = 44;
 pub const SYS_TRUNCATE: usize = 45;
 pub const SYS_FTRUNCATE: usize = 46;
 pub const SYS_FACCESSAT: usize = 48;
+pub const SYS_CHDIR: usize = 49;
 pub const SYS_OPENAT: usize = 56;
 pub const SYS_CLOSE: usize = 57;
 pub const SYS_PIPE2: usize = 59;
