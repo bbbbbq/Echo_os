@@ -126,7 +126,7 @@ impl PageTable {
             let start_vaddr = region.vaddr_range.start;
             let size = region.vaddr_range.size();
             let get_paddr = |vaddr: VirtAddr| -> PhysAddr {
-                let offset = vaddr.as_usize() - region.vaddr_range.start.as_usize();
+                let offset: usize = vaddr.as_usize() - region.vaddr_range.start.as_usize();
                 paddr_range.start.add(offset)
             };
 

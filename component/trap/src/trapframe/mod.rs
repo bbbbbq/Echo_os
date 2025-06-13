@@ -37,6 +37,9 @@ pub enum TrapFrameArgs {
     ARG0,
     ARG1,
     ARG2,
+    ARG3,
+    ARG4,
+    ARG5,
     TLS,
     SYSCALL,
 }

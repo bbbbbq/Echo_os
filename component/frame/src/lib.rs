@@ -12,19 +12,19 @@ use spin::Mutex;
 unsafe extern "C" {
     fn _end();
 }
-
+use log::info;
 lazy_static! {
     pub static ref FRAME_ALLOCATOR: Mutex<FrameAllocator> = {
         let mut start_addr = _end as usize;
         let mut end_addr = start_addr + FRAME_SIZE;
 
-        // if start_addr >= VIRT_ADDR_START {
-        //     start_addr -= VIRT_ADDR_START;
-        // }
+        if start_addr >= VIRT_ADDR_START {
+            start_addr -= VIRT_ADDR_START;
+        }
 
-        // if end_addr >= VIRT_ADDR_START {
-        //     end_addr -= VIRT_ADDR_START;
-        // }
+        if end_addr >= VIRT_ADDR_START {
+            end_addr -= VIRT_ADDR_START;
+        }
 
         let start_paddr = PhysAddr::from_usize(start_addr);
         let end_paddr = PhysAddr::from_usize(end_addr);
@@ -69,6 +69,7 @@ impl FrameAllocator {
         let frame_count = (end.as_usize() - start.as_usize()) / PAGE_SIZE;
         let bitmap = Bitmap::new(frame_count);
 
+        info!("FrameAllocator: start={:?}, end={:?}, frame_count={}", start, end, frame_count);
         Self { start, end, bitmap }
     }
 

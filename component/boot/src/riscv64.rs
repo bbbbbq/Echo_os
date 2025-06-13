@@ -6,6 +6,7 @@ use riscv::register::satp;
 use bitflags::bitflags;
 use console::println;
 use core::arch::naked_asm;
+use riscv::register::sstatus;
 // Helper function to create page table entries
 fn create_pte(addr: usize, flags: u64) -> u64 {
     ((addr >> 12) << 10) as u64 | flags
@@ -104,7 +105,7 @@ pub fn rust_entry(hartid: usize, dtb: usize) {
         println!("dtb : {:x}", dtb);
         loop {}
     }
-
+    unsafe { sstatus::set_sum() };
     unsafe {
         kernel_main(hartid, dtb);
     }

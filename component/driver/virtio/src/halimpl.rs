@@ -25,7 +25,10 @@ unsafe impl Hal for HalImpl {
         let base_paddr = frames[0].paddr;
 
         // Convert physical address to usize for virtio
-        let phys_addr_val = base_paddr.as_usize();
+        let mut phys_addr_val = base_paddr.as_usize();
+        if phys_addr_val >= VIRT_ADDR_START {
+            phys_addr_val -= VIRT_ADDR_START;
+        }
         let phys_addr_adjusted = phys_addr_val;
 
         // Create a virtual address pointer from the physical address
