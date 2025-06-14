@@ -69,8 +69,15 @@ pub async fn initproc() {
     // command("busybox ls -l /bin").await;
     // command("busybox sh init.sh").await;
     // command("busybox ls -l /bin").await;
-
+    command("brk").await;
+    command("chdir").await;
     command("clone").await;
+    command("close").await;
+    command("dup").await;
+    command("dup2").await;
+    command("execve").await;
+    command("exit").await;
+    command("fork").await;
     // command("busybox echo run lua_testcode.sh").await;
     // command("busybox sh lua_testcode.sh").await;
 
@@ -105,7 +112,7 @@ pub async fn initproc() {
     // command("interrupts-test-2").await;
 
     // switch_to_kernel_page_table();
-    println!("!TEST FINISH!");
+    // println!("!TEST FINISH!");
 
     // Shutdown if there just have blankkernel task.
     if TASK_MAP

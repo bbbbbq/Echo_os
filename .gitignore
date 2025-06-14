@@ -15,11 +15,11 @@ Cargo.lock
 qemu.log
 
 # IDE specific files
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 *.swp
 *.swo
-.vscode
 .cargo
 
 mount_point

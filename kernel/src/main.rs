@@ -34,7 +34,7 @@ fn panic(info: &PanicInfo) -> ! {
         error!("[panic] Panicked: {}", info.message());
     }
     os_shut_down();
-    loop {}
+    unreachable!()
 }
 
 #[unsafe(no_mangle)]

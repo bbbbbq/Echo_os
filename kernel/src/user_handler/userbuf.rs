@@ -1,8 +1,13 @@
 
-
 #[derive(Debug, Clone, Copy)]
 pub struct UserBuf<T> {
     pub ptr: *mut T
+}
+
+impl<T> core::fmt::Display for UserBuf<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "UserBuf({:p})", self.ptr)
+    }
 }
 
 
@@ -13,6 +18,12 @@ use crate::alloc::string::String;
 use crate::alloc::vec::Vec;
 
 const MAX_PATH: usize = 256;
+
+impl<T: Copy> UserBuf<T> {
+    pub fn read(&self) -> T {
+        unsafe { self.ptr.read() }
+    }
+}
 
 impl<T> UserBuf<T> {
     pub fn read_string(&self) -> String {
@@ -38,7 +49,18 @@ impl<T> UserBuf<T> {
             core::str::from_utf8(core::slice::from_raw_parts(self.ptr as *const u8, 64)).unwrap()
         }
     }
+
+    pub fn write(&self, value: T) {
+        unsafe {
+            self.ptr.write_volatile(value);
+        }
+    }
+    
+    pub const fn is_valid(&self) -> bool {
+        !self.ptr.is_null()
+    }
+
+    pub fn offset(&self, count: isize) -> Self {
+        Self { ptr: unsafe { self.ptr.offset(count) } }
+    }
 }
-
-
-

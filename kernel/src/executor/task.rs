@@ -29,9 +29,10 @@ pub trait AsyncTask: DowncastSync + Send + Sync + Debug {
 
 
 pub type PinedFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
-
+use bitflags::bitflags;
 
 bitflags! {
+    #[derive(Debug)]
     pub struct CloneFlags: usize {
         const CSIGNAL      = 0x000000ff;
         const VM           = 0x00000100;
@@ -62,6 +63,12 @@ bitflags! {
 pub struct AsyncTaskItem {
     pub future: PinedFuture,
     pub task: Arc<dyn AsyncTask>,
+}
+
+impl AsyncTaskItem {
+    pub fn new(task: Arc<dyn AsyncTask>, future: PinedFuture) -> Self {
+        Self { task, future }
+    }
 }
 
 impl core::fmt::Debug for AsyncTaskItem {

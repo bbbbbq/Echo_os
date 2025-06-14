@@ -1,45 +1,52 @@
 use super::id_alloc::TaskId;
 use crate::alloc::string::ToString;
-use crate::user_handler::entry::user_entry;
-use super::executor::get_cur_usr_task;
-use crate::executor::id_alloc::alloc_tid;
-use alloc::sync::Arc;
-use alloc::sync::Weak;
-use alloc::vec::Vec;
-use elf_ext::LoadElfReturn;
-use filesystem::file::File;
-use filesystem::path::Path;
-use filesystem::fd_table::FdTable;
-use heap::HeapUser;
-use log::info;
-use mem::memset::MemSet;
-use mem::pagetable::PageTable;
-use memory_addr::{VirtAddr, VirtAddrRange};
-use spin::Mutex;
-use spin::rwlock::RwLock;
-use trap::trap::TrapFrame;
-use elf_ext::load_elf_frame;
-use alloc::string::String;
+use crate::executor::executor::get_cur_usr_task;
+use crate::executor::executor::{GLOBLE_EXECUTOR, release_task};
+use crate::executor::id_alloc::{self, alloc_tid};
 use crate::executor::task::{AsyncTask, AsyncTaskItem};
-use crate::executor::executor::GLOBLE_EXECUTOR;
-use trap::trapframe::TrapFrameArgs;
+use crate::user_handler::entry::user_entry;
+use alloc::borrow::ToOwned;
+use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::sync::{Arc, Weak};
+use alloc::vec;
+use alloc::vec::Vec;
 use core::mem::size_of;
 use core::time::Duration;
-use alloc::borrow::ToOwned;
-use crate::executor::executor::release_task;
+use elf_ext::{LoadElfReturn, load_elf_frame};
+use filesystem::fd_table::FdTable;
+use filesystem::file::File;
+use filesystem::path::Path;
+use heap::HeapUser;
+use log::{debug, info};
+use mem::memset::MemSet;
+use mem::pagetable::{self, PageTable};
+use memory_addr::{VirtAddr, VirtAddrRange};
+use spin::{Mutex, MutexGuard, RwLock};
+use trap::trapframe::TrapFrame;
+use trap::trapframe::TrapFrameArgs;
+#[derive(Debug, Clone)]
+pub struct Shm {
+    pub shm_id: usize,
+    pub shm_addr: VirtAddr,
+    pub shm_size: usize,
+}
 
-
+#[derive(Debug, Clone)]
 pub struct ProcessControlBlock {
     pub fd_table: FdTable,
     pub mem_set: MemSet,
     pub curr_dir: Arc<Path>,
     pub heap: HeapUser,
     pub entry: usize,
-    pub threads: Vec<UserTask>,
+    pub threads: Vec<Weak<UserTask>>,
+    pub children: Vec<Arc<UserTask>>,
+    pub shms: BTreeMap<usize, Arc<Shm>>,
     pub exit_code: Option<usize>,
-    pub time: Option<Duration>
+    pub time: Option<Duration>,
 }
 
+#[derive(Clone)]
 pub struct ThreadControlBlock {
     pub cx: TrapFrame,
     pub thread_exit_code: Option<usize>,
@@ -88,7 +95,9 @@ impl UserTask {
                 VirtAddr::from_usize(0),
             )),
             entry: 0,
-            threads: Vec::new(),
+            threads: vec![],
+            children: vec![],
+            shms: BTreeMap::new(),
             exit_code: None,
             time: None,
         }));
@@ -107,14 +116,12 @@ impl UserTask {
         })
     }
 
-
-    pub fn init_cx(load_elf_return:LoadElfReturn) -> TrapFrame
-    {
+    pub fn init_cx(load_elf_return: LoadElfReturn) -> TrapFrame {
         let base = load_elf_return.base;
         let entry_point = load_elf_return.entry_point;
         let sp = load_elf_return.stack_top;
         let mut cx = TrapFrame::new();
-        cx.set_sepc(base+entry_point);
+        cx.set_sepc(base + entry_point);
         cx.set_sp(sp);
         cx
     }
@@ -131,7 +138,7 @@ impl UserTask {
             Arc::new(Path::new("/".to_owned()))
         };
 
-        let mut load_elf_return = load_elf_frame(path.clone());
+        let mut load_elf_return: LoadElfReturn = load_elf_frame(path.clone());
         if load_elf_return.entry_point == 0 {
             // Not a valid ELF file
             return None;
@@ -159,7 +166,9 @@ impl UserTask {
                     VirtAddr::from_usize(load_elf_return.heap_bottom + load_elf_return.heap_size),
                 )),
                 entry: load_elf_return.entry_point,
-                threads: Vec::new(),
+                threads: vec![],
+                children: vec![],
+                shms: BTreeMap::new(),
                 exit_code: None,
                 time: None,
             })),
@@ -169,7 +178,7 @@ impl UserTask {
                 thread_exit_code: None,
             }),
         });
-        
+
         Some(task)
     }
 
@@ -265,13 +274,11 @@ impl UserTask {
         tcb.cx.x[11] = tcb.cx[TrapFrameArgs::SP];
     }
 
-
     pub fn force_cx_ref(&self) -> &'static mut TrapFrame {
         unsafe { &mut self.tcb.as_mut_ptr().as_mut().unwrap().cx }
     }
 
-    pub fn get_fd(&self,fd:usize) -> Option<File>
-    {
+    pub fn get_fd(&self, fd: usize) -> Option<File> {
         self.pcb.lock().fd_table.get(fd).cloned()
     }
 
@@ -279,8 +286,7 @@ impl UserTask {
         self.pcb.lock().heap.clone()
     }
 
-    pub fn set_heap(&self,heap:HeapUser)
-    {
+    pub fn set_heap(&self, heap: HeapUser) {
         self.pcb.lock().heap = heap;
     }
 
@@ -290,17 +296,93 @@ impl UserTask {
         release_task(self.task_id);
     }
 
-    pub fn thread_exit(&self,exit_code:usize)
-    {
+    pub fn thread_exit(&self, exit_code: usize) {
         self.tcb.write().thread_exit_code = Some(exit_code);
         if self.task_id != self.process_id {
             self.pcb
                 .lock()
                 .threads
-                .retain(|x| x.task_id != self.task_id);
+                .retain(|x| x.upgrade().map_or(false, |x| x.task_id != self.task_id));
             self.release();
         }
     }
+
+    pub fn thread_clone(&self) -> Arc<Self> {
+        let parent = self.tcb.read();
+
+        let task_id = alloc_tid();
+        let cur_tcb = RwLock::new(ThreadControlBlock {
+            cx: parent.cx.clone(),
+            thread_exit_code: None,
+        });
+        cur_tcb.write().cx[TrapFrameArgs::RET] = 0;
+
+        let new_task = Arc::new(Self {
+            page_table: self.page_table.clone(),
+            task_id,
+            process_id: self.task_id,
+            parent: RwLock::new(self.parent.read().clone()),
+            pcb: self.pcb.clone(),
+            tcb: cur_tcb,
+        });
+        self.pcb.lock().threads.push(Arc::downgrade(&new_task));
+        new_task
+    }
+
+    pub fn process_clone(self: Arc<Self>) -> Arc<Self> {
+        let parent_tcb = self.tcb.read();
+        let mut parent_pcb = self.pcb.lock();
+
+        let task_id = alloc_tid();
+
+        // Clone the PCB. This requires ProcessControlBlock to be Clone.
+        let mut new_pcb = (*parent_pcb).clone();
+
+        // The new process has its own thread list, containing only itself.
+        // And it has no children yet.
+        new_pcb.threads = vec![];
+        new_pcb.children = vec![];
+
+        let new_tcb = RwLock::new(ThreadControlBlock {
+            cx: parent_tcb.cx.clone(),
+            thread_exit_code: None,
+        });
+        new_tcb.write().cx[TrapFrameArgs::RET] = 0; // Return 0 for child process
+
+        let new_task = Arc::new(Self {
+            // Each process has its own page table.
+            // A real implementation would create a new page table and copy mappings (CoW).
+            // For now, we create a new PageTable by cloning the inner part of the parent's.
+            page_table: Arc::new(Mutex::new(self.page_table.lock().clone())),
+            task_id,
+            process_id: task_id, // For a new process, process_id is same as task_id
+            parent: RwLock::new(Arc::downgrade(&self)), // The parent is the current task
+            pcb: Arc::new(Mutex::new(new_pcb)),
+            tcb: new_tcb,
+        });
+
+        // Add the new task to the parent's children list.
+        parent_pcb.children.push(new_task.clone());
+        // Add the main thread to its own thread list.
+        new_task.pcb.lock().threads.push(Arc::downgrade(&new_task));
+
+        new_task
+    }
+
+    // pub fn fork(&self) -> Arc<Self> {
+    //     let new_task = self.clone();
+    //     let new_task_arc = Arc::new(new_task);
+    //     self.pcb.lock().children.push(new_task_arc.clone());
+    // }
+
+    pub fn inner_map<T>(&self, mut f: impl FnMut(&mut MutexGuard<ProcessControlBlock>) -> T) -> T {
+        f(&mut self.pcb.lock())
+    }
+
+    // pub fn execve(&self, filename: &str, args: Vec<&str>, envp: Vec<&str>)
+    // {
+    //     add_user_task(filename, args, envp)
+    // }
 }
 
 impl AsyncTask for UserTask {
@@ -311,19 +393,20 @@ impl AsyncTask for UserTask {
     fn get_task_id(&self) -> TaskId {
         self.task_id
     }
-    
+
     fn get_task_type(&self) -> super::task::TaskType {
         super::task::TaskType::User
     }
-    
+
     fn exit(&self, _exit_code: usize) {
         unimplemented!()
     }
-    
+
     fn exit_code(&self) -> Option<usize> {
         self.tcb.read().thread_exit_code
     }
 }
+
 pub async fn add_user_task(filename: &str, args: Vec<&str>, envp: Vec<&str>) -> TaskId {
     info!("Adding user task: {}", filename);
     let parent = get_cur_usr_task();
@@ -337,12 +420,9 @@ pub async fn add_user_task(filename: &str, args: Vec<&str>, envp: Vec<&str>) -> 
     let envp: Vec<String> = envp.iter().map(|s| s.to_string()).collect();
 
     info!("Creating task from file: {}", filename);
-    let task = UserTask::new_frome_file(
-        parent.as_ref().map(Arc::downgrade),
-        Path::new(filename.to_owned()),
-    )
-    .await
-    .expect("Failed to create task from file");
+    let task = UserTask::new_frome_file(None, Path::new(filename.to_owned()))
+        .await
+        .expect("Failed to create task from file");
 
     info!(
         "Initializing task stack with {} args and {} env vars",
@@ -362,3 +442,4 @@ pub async fn add_user_task(filename: &str, args: Vec<&str>, envp: Vec<&str>) -> 
     info!("User task {:?} added successfully", task_id);
     task_id
 }
+

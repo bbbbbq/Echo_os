@@ -8,6 +8,7 @@ pub mod id_alloc;
 pub mod error;
 pub mod initproc;
 pub mod ops;
+pub mod sync;
 /// Architecture-specific interrupt handler.
 #[unsafe(no_mangle)]
 pub unsafe extern "Rust" fn _interrupt_for_arch(ctx: &mut TrapFrame, trap_type: TrapType, _: usize) {

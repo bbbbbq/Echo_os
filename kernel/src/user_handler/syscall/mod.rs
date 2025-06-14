@@ -85,6 +85,26 @@ impl UserHandler {
                 let newfd = _args[1];
                 self.sys_dup3(oldfd, newfd).await
             }
+            sysnum::SYS_CLONE => {
+                let flags = _args[0];
+                let stack = _args[1];
+                let ptid = UserBuf::new(_args[2] as *mut u32);
+                let tls = _args[3];
+                let ctid = UserBuf::new(_args[4] as *mut u32);
+                self.sys_clone(flags, stack, ptid, tls, ctid).await
+            }
+            sysnum::SYS_WAIT4 => {
+                let pid = _args[0] as isize;
+                let status = UserBuf::new(_args[1] as *mut i32);
+                let options = _args[2];
+                self.sys_wait4(pid, status, options).await
+            }
+            sysnum::SYS_EXECVE => {
+                let filename = UserBuf::new(_args[0] as *mut u8);
+                let argv: UserBuf<UserBuf<u8>> = UserBuf::new(_args[1] as *mut UserBuf<u8>);
+                let envp: UserBuf<UserBuf<u8>> = UserBuf::new(_args[2] as *mut UserBuf<u8>);
+                self.sys_execve(filename, argv, envp).await
+            }
             _ => {
                 info!("call_id : {}", call_id);
                 error!("Invalid syscall");
