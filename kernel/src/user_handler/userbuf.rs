@@ -55,6 +55,14 @@ impl<T> UserBuf<T> {
             self.ptr.write_volatile(value);
         }
     }
+
+    pub fn write_slice(&self, data: &[u8]) {
+        unsafe {
+            let len = data.len();
+            let dst_slice = core::slice::from_raw_parts_mut(self.ptr as *mut u8, len);
+            dst_slice.copy_from_slice(data);
+        }
+    }
     
     pub const fn is_valid(&self) -> bool {
         !self.ptr.is_null()

@@ -39,7 +39,7 @@ fn panic(info: &PanicInfo) -> ! {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
-    //console::init();
+    console::init();
     unsafe {
         info!("boot_page_table: {:x}", boot_page_table());
     }

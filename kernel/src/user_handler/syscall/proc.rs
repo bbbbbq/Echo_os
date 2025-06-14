@@ -184,7 +184,7 @@ impl UserHandler {
         }
 
         debug!("sys_execve @ filename: {}, args: {:?}, envp: {:?}", file_name, args_vec, envp_vec);
-        let path = Path::new(file_name.clone());
+                let _path = Path::new(file_name.clone());
         
         // Convert Vec<String> to Vec<&str>
         let args_str: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();

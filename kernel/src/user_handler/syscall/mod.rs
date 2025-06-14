@@ -10,7 +10,7 @@ use crate::executor::task::AsyncTask;
 use crate::user_handler::userbuf::UserBuf;
 use log::error;
 use log::info;
-
+use filesystem::file::Stat;
 pub mod fs;
 pub mod mem;
 pub mod proc;
@@ -68,8 +68,9 @@ impl UserHandler {
                 let path = UserBuf::new(_args[1] as *mut u8);
                 let flags = _args[2];
                 let mode = _args[3];
-                self.sys_openat(dir_fd, &path.read_string(), flags, mode)
+                self.sys_openat(dir_fd as usize, path, flags, mode)
                     .await
+                    .map(|x| x as usize)
             }
             sysnum::SYS_GETCWD => {
                 let buf_ptr = _args[0].into();
@@ -105,11 +106,24 @@ impl UserHandler {
                 let envp: UserBuf<UserBuf<u8>> = UserBuf::new(_args[2] as *mut UserBuf<u8>);
                 self.sys_execve(filename, argv, envp).await
             }
+            sysnum::SYS_FSTAT => {
+                let fd = _args[0];
+                self.sys_fstat(fd, UserBuf::new(_args[1] as *mut Stat))
+                    .await
+                    .map(|x| x as usize)
+            }
+            sysnum::SYS_GETDENTS64 => {
+                let fd = _args[0];
+                let dirp = UserBuf::new(_args[1] as *mut u8);
+                let count = _args[2];
+                self.sys_getdents64(fd, dirp, count).await
+            }
             _ => {
                 info!("call_id : {}", call_id);
                 error!("Invalid syscall");
                 loop {}
             }
+
         }
     }
 }

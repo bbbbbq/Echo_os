@@ -1,5 +1,6 @@
-use crate::file::File;
+use super::file::File;
 use alloc::collections::BTreeMap;
+use log::warn;
 use alloc::sync::Arc;
 
 #[derive(Debug, Default, Clone)]
@@ -49,7 +50,9 @@ impl FdTable {
 
     pub fn close(&mut self, fd: usize) {
         if let Some(file) = self.table.remove(&fd) {
-            file.flush().unwrap();
+            if let Err(e) = file.flush() {
+                warn!("Failed to flush file on close (fd={}): {:?}", fd, e);
+            }
         }
     }
 

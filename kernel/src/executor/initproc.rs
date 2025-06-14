@@ -44,76 +44,18 @@ async fn command(cmd: &str) {
 
 pub async fn initproc() {
     println!("start kernel tasks");
-    // command("./runtest.exe -w entry-dynamic.exe argv").await;
-    // command("./entry-dynamic.exe argv").await;
-    // command("busybox echo run time-test").awaait;
-    // command("time-test").await;
-
-    // command("busybox sh basic/run-all.sh").await;
-
-    // command("busybox echo run netperf_testcode.sh").await;
-    // command("busybox sh netperf_testcode.sh").await;
-
-    // command("busybox echo run busybox_testcode.sh").await;
-    // command("busybox sh busybox_testcode.sh").awit;
-
-    // command("busybox echo run libctest_testcode.sh").await;
-    // command("busybox sh libctest_testcode.sh").await;
-    // command("runtest.exe -w entry-static.exe utime").await;
-    // command("busybox ln -s /busybox /bin/cat").await;
-    // command("./bin/cat libctest_testcode.sh").await;
-    // command("busybox ls -l /bin").await;
-    // command("busybox ln -s /busybox /bin/ln").await;
-    // command("busybox ln -s /busybox /bin/wget").await;
-    // command("busybox ln -s /busybox /bin/xz").await;
-    // command("busybox ls -l /bin").await;
-    // command("busybox sh init.sh").await;
-    // command("busybox ls -l /bin").await;
-    command("brk").await;
-    command("chdir").await;
-    command("clone").await;
-    command("close").await;
-    command("dup").await;
-    command("dup2").await;
-    command("execve").await;
-    command("exit").await;
-    command("fork").await;
-    // command("busybox echo run lua_testcode.sh").await;
-    // command("busybox sh lua_testcode.sh").await;
-
-    // command("busybox init").await;
-    // command("busybox sh").await;
-    // command("busybox sh init.sh").await;
-
-    // command("busybox echo run cyclic_testcode.sh").await;
-    // command("busybox sh cyclictest_testcode.sh").await;
-    // kill_all_tasks().await;
-
-    // command("libc-bench").await;
-
-    // command("busybox echo run iperf_testcode.sh").await;
-    // command("busybox sh iperf_testcode.sh").await;
-    // kill_all_tasks().await;
-
-    // command("busybox echo run iozone_testcode.sh").await;
-    // command("busybox sh iozone_testcode.sh ").await;
-
-    // command("busybox echo run lmbench_testcode.sh").await;
-    // command("busybox sh lmbench_testcode.sh").await;
-
-    // command("busybox echo run unixbench_testcode.sh").await;
-    // command("busybox sh unixbench_testcode.sh").await;
-
-    // command("copy-file-range-test-1").await;
-    // command("copy-file-range-test-2").await;
-    // command("copy-file-range-test-3").await;
-    // command("copy-file-range-test-4").await;
-    // command("interrupts-test-1").await;
-    // command("interrupts-test-2").await;
-
-    // switch_to_kernel_page_table();
-    // println!("!TEST FINISH!");
-
+    // command("brk").await;
+    // command("chdir").await;
+    // command("clone").await;
+    // command("close").await;
+    // command("dup").await;
+    // command("dup2").await;
+    // command("execve").await;
+    // command("exit").await;
+    // command("fork").await;
+    // command("fstat").await;
+    // command("getcwd").await;
+    command("getdents").await;
     // Shutdown if there just have blankkernel task.
     if TASK_MAP
         .lock()

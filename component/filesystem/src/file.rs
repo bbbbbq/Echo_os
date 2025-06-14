@@ -15,7 +15,6 @@ pub struct File {
 }
 
 impl File {
-
     pub fn open_relative(&self, file_name: &str,open_flags:OpenFlags) -> VfsResult<Self> {
         let current_inode = self.inner.clone();
         let inode = current_inode.lookup(file_name)?;
@@ -271,5 +270,77 @@ impl File {
     pub fn get_file_size(&self) -> VfsResult<usize> {
         let attr = self.inner.getattr()?;
         Ok(attr.size)
+    }
+
+    pub fn stat(&self, stat: &mut Stat) -> VfsResult<()> {
+        let attr = self.inner.getattr()?;
+        stat.st_size = attr.size as i64;
+        stat.st_mode = match attr.file_type {
+            FileType::File => 0o100000, // S_IFREG
+            FileType::Directory => 0o040000, // S_IFDIR
+            FileType::CharDevice => 0o020000, // S_IFCHR
+            FileType::BlockDevice => 0o060000, // S_IFBLK
+            FileType::Pipe => 0o010000, // S_IFIFO
+            FileType::SymLink => 0o120000, // S_IFLNK
+            FileType::Socket => 0o140000, // S_IFSOCK
+            FileType::Unknown => 0,
+        };
+        stat.st_ino = 0;
+        stat.st_nlink = 0;
+        // Fill other fields with 0 or default values for now
+        stat.st_dev = 0;
+        stat.st_uid = 0;
+        stat.st_gid = 0;
+        stat.st_rdev = 0;
+        stat.st_atime = 0;
+        stat.st_mtime = 0;
+        stat.st_ctime = 0;
+        stat.st_blksize = 512;
+        stat.st_blocks = (attr.size as i64 + 511) / 512;
+
+        Ok(())
+    }
+
+
+    pub fn getdents(&self, buffer: &mut [u8]) -> Result<usize, VfsError> {
+        self.read_dir().map(|entries| {
+            let mut offset = 0;
+            for entry in entries {
+                let entry_size = core::mem::size_of::<DirEntry>();
+                if offset + entry_size > buffer.len() {
+                    break;
+                }
+                let entry_ptr = unsafe { buffer.as_mut_ptr().add(offset) };
+                unsafe {
+                    core::ptr::write(entry_ptr as *mut DirEntry, entry);
+                }
+                offset += entry_size;
+            }
+            offset
+        })
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Stat {
+    pub st_dev: u64,     // 文件所在设备的ID
+    pub st_ino: u64,     // 文件的inode号
+    pub st_mode: u32,    // 文件类型和权限
+    pub st_nlink: u32,   // 硬链接数
+    pub st_uid: u32,     // 所有者用户ID
+    pub st_gid: u32,     // 所有者组ID
+    pub st_rdev: u64,    // 特殊设备ID（仅设备文件有效）
+    pub st_size: i64,    // 文件大小（字节数）
+    pub st_atime: i64,   // 最后访问时间
+    pub st_mtime: i64,   // 最后修改时间
+    pub st_ctime: i64,   // 最后状态变更时间
+    pub st_blksize: i64, // 文件I/O的块大小
+    pub st_blocks: i64,  // 分配的磁盘块数
+}
+
+impl Stat {
+    pub fn new() -> Self {
+        Self::default()
     }
 }

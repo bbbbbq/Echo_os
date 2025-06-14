@@ -1,12 +1,15 @@
 use crate::user_handler::handler::UserHandler;
+use crate::user_handler::userbuf::UserBuf;
 use memory_addr::VirtAddr;
 
 use crate::executor::error::TaskError;
-use crate::alloc::string::ToString;
+use crate::alloc::string::{String, ToString};
 use filesystem::path::Path;
 use log::{debug, info};
 use filesystem::vfs::OpenFlags;
-use filesystem::file::File;
+use filesystem::file::{File, Stat};
+use alloc::vec;
+
 impl UserHandler
 {
     pub async fn sys_write(&self, fd: usize, buf_ptr: VirtAddr, count: usize) -> Result<usize, TaskError> {
@@ -68,32 +71,46 @@ impl UserHandler
     }
 
     pub async fn sys_openat(
-        &mut self,
-        dir_fd: isize,
-        filename: &str,
+        &self,
+        dirfd: usize,
+        filename_ptr: UserBuf<u8>,
         flags: usize,
-        _mode: usize,
-    ) -> Result<usize, TaskError> {
-        debug!("sys_openat @ dir_fd: {}, filename: {}, flags: {}, mode: {} curr_dir: {}", dir_fd, filename, flags, _mode, self.task.pcb.lock().curr_dir.to_string());
-        let open_flags = OpenFlags::from_bits_truncate(flags as u32);
+        mode: usize,
+    ) -> Result<isize, TaskError> {
+        let filename = filename_ptr.read_string();
+        let flags = OpenFlags::from_bits_truncate(flags as u32);
+        debug!(
+            "sys_openat @ dirfd: {}, filename: {}, flags: {:?}, mode: {}",
+            dirfd, filename, flags, mode
+        );
 
-        let file = if filename.starts_with('/') {
-            // Absolute path, dir_fd is ignored.
-            File::open(filename, open_flags)?
+        let open_path = if filename.starts_with('/') {
+            filename
         } else {
-            // Relative path.
-            let dir = if dir_fd == -100 { // AT_FDCWD
-                let cwd = self.task.pcb.lock().curr_dir.clone();
-                File::open(&cwd.to_string(), OpenFlags::O_RDONLY)?
+            // TODO: handle dirfd properly, for now assume AT_FDCWD
+            let pcb = self.task.pcb.lock();
+            let cwd = pcb.curr_dir.to_string();
+
+            // Handle "." and "./" to avoid paths like "/foo/."
+            if filename == "." || filename == "./" {
+                cwd
             } else {
-                self.task.get_fd(dir_fd as usize).ok_or(TaskError::EBADF)?
-            };
-            info!("filename: {:?}", filename);
-            dir.open_at(filename, open_flags)?
+                let mut full_path = if cwd == "/" {
+                    String::from("/")
+                } else {
+                    cwd + "/"
+                };
+                let relative_path = filename.strip_prefix("./").unwrap_or(&filename);
+                full_path.push_str(relative_path);
+                full_path
+            }
         };
 
+        debug!("sys_openat: final path: {}", open_path);
+
+        let file = File::open(&open_path, flags)?;
         let fd = self.task.pcb.lock().fd_table.alloc(file);
-        Ok(fd)
+        Ok(fd as isize)
     }
 
 
@@ -109,5 +126,24 @@ impl UserHandler
         let file = self.task.get_fd(fd).ok_or(TaskError::EBADF)?;
         let fd_dst = self.task.pcb.lock().fd_table.alloc(file);
         Ok(fd_dst)
+    }
+
+    pub async fn sys_fstat(&self, fd: usize, stat_ptr: UserBuf<Stat>) -> Result<isize, TaskError> {
+        debug!("sys_fstat @ fd: {} stat_ptr: {:?}", fd, stat_ptr);
+
+        let file = self.task.get_fd(fd).ok_or(TaskError::EBADF)?;
+        let mut stat = Stat::new();
+        file.stat(&mut stat)?;
+        stat_ptr.write(stat);
+        Ok(0)
+    }
+
+    pub async fn sys_getdents64(&self, fd: usize, buf_ptr: UserBuf<u8>, len: usize) -> Result<usize, TaskError> {
+        debug!("sys_getdents64 @ fd: {} buf_ptr: {:?} len: {}", fd, buf_ptr, len);
+        let file = self.task.get_fd(fd).ok_or(TaskError::EBADF)?;
+        let mut buf = vec![0; len];
+        let result = file.getdents(&mut buf)?;
+        buf_ptr.write_slice(&buf[..result]);
+        Ok(result)
     }
 }
