@@ -193,4 +193,17 @@ impl UserHandler {
         self.task.thread_exit(id.0);
         Ok(id.0)
     }
+
+
+    /// sys_getpid() 获取进程 id
+    pub async fn sys_getpid(&self) -> Result<usize, TaskError> {
+        Ok(self.task.process_id.0)
+    }
+
+    pub async fn sys_getppid(&self) -> Result<usize, TaskError> {
+        match self.task.parent.read().upgrade() {
+            Some(parent) => Ok(parent.process_id.0),
+            None => Ok(-1_isize as usize),
+        }
+    }
 }

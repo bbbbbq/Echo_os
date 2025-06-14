@@ -118,6 +118,12 @@ impl UserHandler {
                 let count = _args[2];
                 self.sys_getdents64(fd, dirp, count).await
             }
+            sysnum::SYS_GETPID => {
+                self.sys_getpid().await
+            }
+            sysnum::SYS_GETPPID => {
+                self.sys_getppid().await
+            }
             _ => {
                 info!("call_id : {}", call_id);
                 error!("Invalid syscall");

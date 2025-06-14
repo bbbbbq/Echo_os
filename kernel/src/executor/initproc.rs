@@ -55,7 +55,7 @@ pub async fn initproc() {
     // command("fork").await;
     // command("fstat").await;
     // command("getcwd").await;
-    command("getdents").await;
+    command("getppid").await;
     // Shutdown if there just have blankkernel task.
     if TASK_MAP
         .lock()
