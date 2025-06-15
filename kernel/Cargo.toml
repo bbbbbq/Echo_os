@@ -34,5 +34,6 @@ downcast-rs = { workspace = true }
 bitflags = { workspace = true }
 async-recursion = { workspace = true }
 timer = { workspace = true }
+struct_define = { workspace = true }
 [target.'cfg(target_arch = "riscv64")'.dependencies]
 riscv = "0.13.0"

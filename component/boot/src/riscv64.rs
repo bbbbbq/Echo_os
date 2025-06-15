@@ -1,5 +1,5 @@
 use config::target::plat::VIRT_ADDR_START;
-use core::arch::{asm, global_asm};
+use core::arch::global_asm;
 use core::ptr::{addr_of_mut};
 use riscv::register::satp;
 // Define PTE flags as a simple bitflags enum

@@ -1,22 +1,18 @@
 use crate::memregion::MemRegion;
 use crate::memset::MemSet;
 use crate::pag_hal;
-use crate::pag_hal::PagingHandlerImpl;
 use arch::change_pagetable;
 use config::target::plat::PAGE_SIZE;
 use config::target::plat::VIRT_ADDR_START;
 use console::println;
-use core::arch::asm;
 use frame::alloc_continues;
-use lazy_static::lazy_static;
 use log::error;
 use log::info;
 use memory_addr::{MemoryAddr, PhysAddr, VirtAddr};
-use page_table_multiarch::{GenericPTE, MappingFlags, PagingHandler, riscv::Sv39PageTable};
+use page_table_multiarch::{GenericPTE, MappingFlags, riscv::Sv39PageTable};
 use page_table_entry::riscv::Rv64PTE;
 use memory_addr::AddrRange;
 use alloc::borrow::ToOwned;
-use config::target::plat::FRAME_SIZE;
 use crate::memregion::MemRegionType;
 // Removed duplicate import of MemRegion
 use frame::get_frame_start_end;
@@ -70,9 +66,9 @@ impl PageTable {
         }
     }
 
-    pub fn restore(&mut self) {
+    pub fn restore(&mut self) -> Result<(), ()> {
         self.release();
-        let mut paddr = unsafe { boot_page_table() };
+        let paddr = unsafe { boot_page_table() };
         // if paddr >= VIRT_ADDR_START {
         //     paddr -= VIRT_ADDR_START;
         // }
@@ -96,7 +92,7 @@ impl PageTable {
             is_mapped: false,
             frames: None,
         };
-        self.map_region_user(&mut mem_region);
+        self.map_region_user(&mut mem_region)?;
 
         let (mmio_start,mmio_end) = get_mmio_start_end();
         debug!("mmio_start: {:x}, mmio_end: {:x}", mmio_start, mmio_end);
@@ -109,9 +105,8 @@ impl PageTable {
             is_mapped: false,
             frames: None,
         };
-        self.map_region_user(&mut mem_region);
-
-
+        self.map_region_user(&mut mem_region)?;
+        Ok(())
     }
 
     pub fn release(&mut self) {
@@ -135,8 +130,7 @@ impl PageTable {
             PhysAddr::from_usize(paddr_range[0].paddr.as_usize() + offset)
         };
 
-        let _ = self
-            .page_table
+        let _ = self.page_table
             .map_region(start_vaddr, get_paddr, size, area.pte_flags, true, true)
             .expect("Failed to map region in page table");
         area.is_mapped = true;
@@ -148,10 +142,11 @@ impl PageTable {
         }
     }
 
-    pub fn map_mem_set_user(&mut self, mem_set: MemSet) {
+    pub fn map_mem_set_user(&mut self, mem_set: MemSet) -> Result<(), ()> {
         for mut region in mem_set.regions.into_iter() {
-            self.map_region_user(&mut region);
+            self.map_region_user(&mut region)?;
         }
+        Ok(())
     }
 
     pub fn change_pagetable(&self) {
@@ -168,11 +163,12 @@ impl PageTable {
                 paddr_range.start.add(offset)
             };
 
-            self.page_table
+            let _ = self.page_table
                 .map_region(start_vaddr, get_paddr, size, region.pte_flags, true, true)
                 .map_err(|_e| ())?;
 
             region.is_mapped = true;
+            arch::flush_tlb();
             Ok(())
         } else {
             error!("Failed to map region in page table because paddr_range is None");
@@ -181,7 +177,7 @@ impl PageTable {
     }
 
     pub fn flush() {
-        arch::flush();
+        arch::flush_tlb();
     }
 
     pub fn translate(&self, vaddr: VirtAddr) -> Option<PhysAddr> {
@@ -199,6 +195,16 @@ impl PageTable {
         }
     }
 
+    pub fn unmap_region(&mut self, region: &mut MemRegion) {
+        let start_vaddr = region.vaddr_range.start;
+        let size = region.vaddr_range.size();
+        let _ = self.page_table
+            .unmap_region(start_vaddr, size, true)
+            .expect("Failed to unmap region in page table");
+        region.is_mapped = false;
+        arch::flush_tlb();
+    }
+
     pub fn print_maped_region(&self) {
         println!(
             "[kernel] Mapped Regions for PageTable @ {:#x}:",
@@ -211,7 +217,7 @@ impl PageTable {
                 unsafe { core::slice::from_raw_parts(table_paddr.as_usize() as *const _, 512) };
 
             for (i, pte) in table.iter().enumerate() {
-                                if !pte.is_present() {
+                if !pte.is_present() {
                     continue;
                 }
 
@@ -219,7 +225,7 @@ impl PageTable {
                 let page_size = 1 << (12 + (2 - level) * 9);
                 let current_va = base_va + i * page_size;
 
-                                if pte.is_huge() {
+                if pte.is_huge() {
                     let page_size_str = ["1G", "2M", "4K"][level];
                     println!(
                         "  VA: {:#x} -> PA: {:#x} (size: {}, flags: {:?})",

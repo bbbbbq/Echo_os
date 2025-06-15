@@ -18,3 +18,4 @@ spin = { workspace = true }
 lazy_static = { workspace = true }
 console = { workspace = true }
 virtio-drivers = { workspace = true }
+struct_define = { workspace = true }

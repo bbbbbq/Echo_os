@@ -1,14 +1,13 @@
 use page_table_multiarch::PagingHandler;
-use memory_addr::{MemoryAddr, PhysAddr, VirtAddr};
+use memory_addr::{PhysAddr, VirtAddr};
 use log::debug;
-use config::target::plat::VIRT_ADDR_START;
 
 pub struct PagingHandlerImpl;
 
 
 impl PagingHandler for PagingHandlerImpl {
     fn alloc_frame() -> Option<PhysAddr> {
-        let mut paddr = frame::alloc_frame().map(|ft| ft.paddr).unwrap();
+        let paddr = frame::alloc_frame().map(|ft| ft.paddr).unwrap();
         // if paddr.as_usize() < VIRT_ADDR_START {
         //     paddr = PhysAddr::from_usize(paddr.as_usize() + VIRT_ADDR_START);
         // }

@@ -87,6 +87,14 @@ impl Inode for DevFsDirInode {
         Ok(FileAttr {
             size: 0,
             file_type: FileType::Directory,
+            nlinks: 1,
+            uid: 0,
+            gid: 0,
+            atime: 0,
+            mtime: 0,
+            ctime: 0,
+            blk_size: 512,
+            blocks: 0,
         })
     }
 }

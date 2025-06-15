@@ -2,15 +2,17 @@ use crate::executor::error::TaskError;
 use crate::test_ls;
 use crate::user_handler::handler::UserHandler;
 use crate::user_handler::userbuf::UserBuf;
-use alloc::string::{String, ToString};
-use alloc::vec::{self, Vec};
-use filesystem::vfs::{DirEntry, FileType};
+use alloc::string::ToString;
+use alloc::vec::Vec;
+use console::println;
 use filesystem::file::{File, Stat};
 use filesystem::path::Path;
+use filesystem::pipe::create_pipe;
 use filesystem::vfs::OpenFlags;
+use filesystem::vfs::{DirEntry, FileType};
 use log::debug;
+use log::info;
 use memory_addr::VirtAddr;
-
 const AT_FDCWD: isize = -100;
 
 impl UserHandler {
@@ -98,10 +100,14 @@ impl UserHandler {
         flags: usize,
         mode: usize,
     ) -> Result<isize, TaskError> {
+        // debug!("sys_openat @ dirfd: {}, filename_ptr: {:?}, flags: {}, mode: {}", dirfd, filename_ptr, flags, mode);
         let filename = filename_ptr.read_string();
         let flags = OpenFlags::from_bits_truncate(flags as u32);
         let mode = mode as u32;
-        debug!("sys_openat @ dirfd: {}, filename: {}, flags: {:?}, mode: {}", dirfd, filename, flags, mode);
+        debug!(
+            "sys_openat @ dirfd: {}, filename: {}, flags: {:?}, mode: {}",
+            dirfd, filename, flags, mode
+        );
         let cwd = if dirfd as isize == -100 {
             File::open(
                 &self.task.pcb.lock().curr_dir.to_string(),
@@ -110,6 +116,13 @@ impl UserHandler {
         } else {
             self.task.get_fd(dirfd).ok_or(TaskError::EBADF)?
         };
+        // Remove leading dot if present in filename
+        let filename = if filename.starts_with('.') {
+            filename.strip_prefix('.').unwrap_or(&filename).to_string()
+        } else {
+            filename
+        };
+
         let file = cwd.open_at(&filename, flags)?;
         let fd = self.task.pcb.lock().fd_table.alloc(file);
         Ok(fd as isize)
@@ -135,6 +148,7 @@ impl UserHandler {
         let file = self.task.get_fd(fd).ok_or(TaskError::EBADF)?;
         let mut stat = Stat::new();
         file.stat(&mut stat)?;
+        //println!("sys_fstat @ fd: {} stat: {:?}", fd, stat);
         stat_ptr.write(stat);
         Ok(0)
     }
@@ -192,7 +206,8 @@ impl UserHandler {
             user_output_bytes.extend_from_slice(&(d_reclen_aligned as u16).to_ne_bytes());
 
             // d_type
-            let dt_type: u8 = match entry.file_type { // Changed: d_type -> file_type
+            let dt_type: u8 = match entry.file_type {
+                // Changed: d_type -> file_type
                 FileType::File => 8,      // DT_REG
                 FileType::Directory => 4, // DT_DIR
                 _ => 0,                   // DT_UNKNOWN
@@ -208,14 +223,58 @@ impl UserHandler {
             if d_reclen_aligned > current_entry_len {
                 user_output_bytes.resize(current_total_bytes_in_user_output + d_reclen_aligned, 0);
             }
-            
+
             current_total_bytes_in_user_output += d_reclen_aligned;
         }
 
         if !user_output_bytes.is_empty() {
             buf_ptr.write_slice(&user_output_bytes); // Changed: Removed ? operator
         }
-        
+
         Ok(current_total_bytes_in_user_output)
+    }
+
+    pub async fn sys_read(&self, fd: usize, buf_ptr: UserBuf<u8>, count: usize) -> Result<usize, TaskError> {
+        let mut file = self.task.get_fd(fd).ok_or(TaskError::EBADF)?;
+        let mut buffer = unsafe { core::slice::from_raw_parts_mut(buf_ptr.ptr, count) };
+        file.read(&mut buffer)?;
+        Ok(count)
+    }
+
+
+    pub async fn sys_pipe2(&self, fds_ptr: UserBuf<u32>, _unknown: usize) -> Result<usize, TaskError> {
+        debug!("sys_pipe2 @ fds_ptr: {}, _unknown: {}", fds_ptr, _unknown);
+        let fds = fds_ptr.slice_mut_with_len(2);
+
+        let (rx, tx) = create_pipe();
+        let rx_file = File::new_dev(rx);
+        let tx_file = File::new_dev(tx);
+        let rx_fd = self.task.pcb.lock().fd_table.alloc(rx_file);
+        let tx_fd = self.task.pcb.lock().fd_table.alloc(tx_file);
+        fds[0] = rx_fd as u32;
+        fds[1] = tx_fd as u32;
+        Ok(0)
+    }
+
+    
+    pub async fn sys_mount(
+        &self,
+        special: UserBuf<i8>,
+        dir: UserBuf<i8>,
+        fstype: UserBuf<i8>,
+        flags: usize,
+        data: usize,
+    ) -> Result<usize, TaskError> {
+        // let special = special.get_cstr().map_err(|_| Errno::EINVAL)?;
+        // let dir = dir.get_cstr().map_err(|_| Errno::EINVAL)?;
+        // let fstype = fstype.get_cstr().map_err(|_| Errno::EINVAL)?;
+        // debug!(
+        //     "sys_mount @ special: {}, dir: {}, fstype: {}, flags: {}, data: {:#x}",
+        //     special, dir, fstype, flags, data
+        // );
+
+        // let dev_node = File::open(special, OpenFlags::RDONLY)?;
+        // dev_node.mount(dir)?;
+        Ok(0)
     }
 }

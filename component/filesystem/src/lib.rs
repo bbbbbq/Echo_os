@@ -9,6 +9,7 @@ pub mod mount;
 pub mod path;
 pub mod plug;
 pub mod vfs;
+pub mod pipe;
 
 use crate::alloc::string::ToString;
 use crate::devfs::DevFs;

@@ -71,4 +71,8 @@ impl<T> UserBuf<T> {
     pub fn offset(&self, count: isize) -> Self {
         Self { ptr: unsafe { self.ptr.offset(count) } }
     }
+
+    pub fn slice_mut_with_len(&self, len: usize) -> &mut [T] {
+        unsafe { core::slice::from_raw_parts_mut(self.ptr, len) }
+    }
 }

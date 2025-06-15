@@ -17,7 +17,6 @@ use crate::executor::task::KernelTask;
 /// Global task queue
 pub(crate) static TASK_QUEUE: Mutex<VecDeque<AsyncTaskItem>> = Mutex::new(VecDeque::new());
 
-/// Global executor
 lazy_static! {
     pub static ref GLOBLE_EXECUTOR: Executor = Executor::new();
     pub static ref TASK_MAP: Mutex<BTreeMap<TaskId, Arc<dyn AsyncTask>>> = Mutex::new(BTreeMap::new());
@@ -31,6 +30,7 @@ pub struct Executor {
 
 /// Waker
 pub struct Waker {
+    #[allow(dead_code)]
     task_id: TaskId,
 }
 

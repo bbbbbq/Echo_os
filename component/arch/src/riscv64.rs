@@ -1,11 +1,11 @@
 use sbi_rt::{system_reset, NoReason, Shutdown};
-use log::{info,debug};
+use log::debug;
 pub fn os_shut_down() -> ! {
     system_reset(Shutdown, NoReason);
     unreachable!()
 }
 
-use riscv::register::satp::{self, Mode, Satp};
+use riscv::register::satp::{self, Mode};
 
 pub fn change_pagetable(paddr: usize) {
     // 1. Read the current Satp value using the module's read() function
@@ -24,7 +24,7 @@ pub fn change_pagetable(paddr: usize) {
     }
 }
 
-pub fn flush() {
+pub fn flush_tlb() {
     unsafe {
         riscv::asm::sfence_vma_all();
     }

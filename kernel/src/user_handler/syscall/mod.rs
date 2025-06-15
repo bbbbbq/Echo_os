@@ -1,5 +1,7 @@
 use super::handler::UserHandler;
 use super::handler::UserTaskControlFlow;
+use struct_define::tms::TMS;
+use struct_define::uname::UTSname;
 use trap::trap::EscapeReason;
 use trap::trap::run_user_task;
 use trap::trapframe::{TrapFrame, TrapFrameArgs};
@@ -15,6 +17,7 @@ pub mod fs;
 pub mod mem;
 pub mod proc;
 pub mod other;
+use struct_define::timespec::TimeSpec;
 
 impl UserHandler {
     pub async fn handle_syscall(&mut self, cx_ref: &mut TrapFrame) -> UserTaskControlFlow {
@@ -139,6 +142,32 @@ impl UserHandler {
                 let offset = _args[5];
                 self.sys_mmap(addr, len, prot, flags, fd, offset).await
             }
+            sysnum::SYS_MUNMAP => {
+                let addr = _args[0];
+                let len = _args[1];
+                self.sys_munmap(addr, len).await
+            }
+            sysnum::SYS_READ => {
+                let fd = _args[0];
+                let buf_ptr = UserBuf::new(_args[1] as *mut u8);
+                let count = _args[2];
+                self.sys_read(fd, buf_ptr, count).await
+            }
+            sysnum::SYS_PIPE2 => {
+                let fds_ptr = UserBuf::new(_args[0] as *mut u32);
+                let unknown = _args[1];
+                self.sys_pipe2(fds_ptr, unknown).await
+            }
+            sysnum::SYS_NANOSLEEP => {
+                let req = UserBuf::new(_args[0] as *mut TimeSpec);
+                let _rem = UserBuf::new(_args[1] as *mut TimeSpec);
+                self.sys_nanosleep(req, _rem).await
+            }
+            sysnum::SYS_TIMES => {
+                let tms_ptr = UserBuf::new(_args[0] as *mut TMS);
+                self.sys_times(tms_ptr).await
+            }
+            sysnum::SYS_UNAME => self.sys_uname(UserBuf::new(_args[0] as *mut UTSname)).await,
             _ => {
                 info!("call_id : {}", call_id);
                 error!("Invalid syscall");

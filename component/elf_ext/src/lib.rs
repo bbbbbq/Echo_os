@@ -3,6 +3,7 @@
 extern crate alloc;
 
 use alloc::string::ToString;
+use alloc::format;
 use config::target::plat::PAGE_SIZE;
 use filesystem::{file::File, path::Path, vfs::OpenFlags};
 use frame::alloc_continues;
@@ -198,8 +199,8 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
             end_va,
             paddr_start,
             paddr_end,
-            flags,
-            "elf_segment".to_string(),
+            flags | MappingFlags::USER,
+            format!("elf_segment_{}", i).to_string(),
             region_type,
         );
         memset.push_region(region);

@@ -1,12 +1,8 @@
 use crate::executor::error::TaskError;
 use crate::user_handler::handler::UserHandler;
 use log::{debug, warn};
-use crate::executor::ops::yield_now;
 use crate::executor::task::{AsyncTask, CloneFlags};
 use crate::user_handler::userbuf::UserBuf;
-use crate::executor::thread::UserTask;
-use alloc::sync::Arc;
-use crate::executor::executor::GLOBLE_EXECUTOR;
 use crate::executor::task::AsyncTaskItem;
 use crate::executor::executor::add_ready_task;
 use crate::user_handler::entry::user_entry;

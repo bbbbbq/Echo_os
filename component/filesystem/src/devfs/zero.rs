@@ -76,6 +76,14 @@ impl Inode for ZeroDev {
         Ok(FileAttr {
             size: 0, // /dev/zero is infinite, but getattr usually shows 0 for devices
             file_type: FileType::CharDevice,
+            nlinks: 1,
+            uid: 0,
+            gid: 0,
+            atime: 0,
+            mtime: 0,
+            ctime: 0,
+            blk_size: 512,
+            blocks: 0,
         })
     }
 }

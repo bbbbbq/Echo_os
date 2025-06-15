@@ -579,6 +579,14 @@ impl Inode for Ext4FileWrapper {
             Ok(FileAttr {
                 size: size_val as usize,
                 file_type: self.file_type,
+                nlinks: 1,
+                uid: 0,
+                gid: 0,
+                atime: 0,
+                mtime: 0,
+                ctime: 0,
+                blk_size: 512,
+                blocks: 0,
             })
         } else {
             error!(

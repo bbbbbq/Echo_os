@@ -2,6 +2,7 @@ use crate::path::Path;
 use core::marker::Send;
 use core::marker::Sync;
 use core::result::Result;
+use struct_define::poll_event::PollEvent;
 use downcast_rs::{DowncastSync, impl_downcast};
 extern crate alloc;
 use alloc::string::String;
@@ -105,7 +106,14 @@ pub type VfsResult<T> = Result<T, VfsError>;
 pub struct FileAttr {
     pub size: usize,
     pub file_type: FileType,
-    // We can add more fields like permissions, timestamps, etc. later
+    pub nlinks: u32,
+    pub uid: u32,
+    pub gid: u32,
+    pub atime: u64,
+    pub mtime: u64,
+    pub ctime: u64,
+    pub blk_size: u32,
+    pub blocks: u32,
 }
 
 pub struct DirEntry {
@@ -143,7 +151,7 @@ pub trait Inode: DowncastSync + Send + Sync + core::fmt::Debug {
         unimplemented!()
     }
     fn flush(&self) -> VfsResult<()> {
-        unimplemented!()
+        Ok(())
     }
     fn rename(&self, _name: &str) -> VfsResult<()> {
         unimplemented!()
@@ -159,6 +167,10 @@ pub trait Inode: DowncastSync + Send + Sync + core::fmt::Debug {
     }
 
     fn get_type(&self) -> VfsResult<FileType> {
+        Err(VfsError::NotSupported)
+    }
+
+    fn poll(&self, event: PollEvent) -> VfsResult<PollEvent> {
         Err(VfsError::NotSupported)
     }
 }

@@ -5,7 +5,7 @@ use alloc::boxed::Box;
 use core::pin::Pin;
 use downcast_rs::{impl_downcast, DowncastSync};
 use core::fmt::Debug;
-use arch::flush;
+use arch::flush_tlb;
 /// A task type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskType {
@@ -104,7 +104,7 @@ impl AsyncTask for KernelTask {
 
     fn before_run(&self) {
         change_boot_pagetable();
-        flush();
+        flush_tlb();
     }
 
     fn get_task_type(&self) -> TaskType {

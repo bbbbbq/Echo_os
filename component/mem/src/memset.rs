@@ -1,6 +1,9 @@
+use crate::pagetable::PageTable;
+
+
 use super::memregion::MemRegion;
 use alloc::vec::Vec;
-use memory_addr::{align_up, VirtAddr};
+use memory_addr::{VirtAddr, align_up};
 
 #[derive(Clone, Debug)]
 pub struct MemSet {
@@ -17,12 +20,10 @@ impl core::fmt::Display for MemSet {
     }
 }
 
-
-
 impl MemSet {
     pub fn new() -> Self {
         Self {
-            regions: Vec::new()
+            regions: Vec::new(),
         }
     }
 
@@ -42,5 +43,31 @@ impl MemSet {
             last_end = region.vaddr_range.end;
         }
         VirtAddr::from(align_up(last_end.as_usize(), 4096))
+
+        // VirtAddr::from_usize(0x300000000)
+    }
+
+    pub fn unmap_region(&mut self, start: usize, size: usize, pagetable: &mut PageTable) {
+        if let Some(index) = self.regions.iter().position(|region| {
+            region.vaddr_range.start.as_usize() <= start
+                && start + size <= region.vaddr_range.end.as_usize()
+        }) {
+            let target_region = self.regions.remove(index);
+
+            // Unmap from page table
+            let _ = pagetable
+                .page_table
+                .unmap_region(VirtAddr::from(start), size, true)
+                .expect("unmap failed");
+
+            let (left, right) = target_region.sub_region(start, size);
+
+            if left.vaddr_range.size() > 0 {
+                self.regions.push(left);
+            }
+            if right.vaddr_range.size() > 0 {
+                self.regions.push(right);
+            }
+        }
     }
 }

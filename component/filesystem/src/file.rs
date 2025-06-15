@@ -1,7 +1,7 @@
 use crate::mount::get_mount_node;
-use crate::vfs::{DirEntry, FileAttr, FileType, Inode, OpenFlags, VfsError, VfsResult};
+use crate::vfs::{DirEntry, FileType, Inode, OpenFlags, VfsError, VfsResult};
 use alloc::{
-    string::{String, ToString},
+    string::ToString,
     sync::Arc,
     vec::Vec,
 };
@@ -59,7 +59,7 @@ impl File {
                     return Err(VfsError::IsDirectory);
                 }
 
-                let mut file = Self {
+                let file = Self {
                     inner: inode,
                     openflags: open_flags,
                     offset: 0,
@@ -169,7 +169,7 @@ impl File {
                     return Err(VfsError::IsDirectory);
                 }
 
-                let mut file = Self {
+                let file = Self {
                     inner: inode,
                     openflags: open_flags,
                     offset: 0,
@@ -274,29 +274,27 @@ impl File {
 
     pub fn stat(&self, stat: &mut Stat) -> VfsResult<()> {
         let attr = self.inner.getattr()?;
-        stat.st_size = attr.size as i64;
+        stat.st_size = attr.size as u64;
         stat.st_mode = match attr.file_type {
-            FileType::File => 0o100000, // S_IFREG
+            FileType::File => 0o100000,      // S_IFREG
             FileType::Directory => 0o040000, // S_IFDIR
+            FileType::SymLink => 0o120000,    // S_IFLNK
             FileType::CharDevice => 0o020000, // S_IFCHR
             FileType::BlockDevice => 0o060000, // S_IFBLK
-            FileType::Pipe => 0o010000, // S_IFIFO
-            FileType::SymLink => 0o120000, // S_IFLNK
-            FileType::Socket => 0o140000, // S_IFSOCK
+            FileType::Pipe => 0o010000,      // S_IFIFO
+            FileType::Socket => 0o140000,    // S_IFSOCK
             FileType::Unknown => 0,
         };
-        stat.st_ino = 0;
-        stat.st_nlink = 0;
-        // Fill other fields with 0 or default values for now
-        stat.st_dev = 0;
-        stat.st_uid = 0;
-        stat.st_gid = 0;
-        stat.st_rdev = 0;
-        stat.st_atime = 0;
-        stat.st_mtime = 0;
-        stat.st_ctime = 0;
+        stat.st_nlink = attr.nlinks as u32;
+        stat.st_uid = attr.uid as u32;
+        stat.st_gid = attr.gid as u32;
+        stat.st_atime_sec = attr.atime as u64;
+        stat.st_mtime_sec = attr.mtime as u64;
+        stat.st_ctime_sec = attr.ctime as u64;
+        stat.st_blksize = attr.blk_size as u32;
+        stat.st_blocks = attr.blocks as u32;
         stat.st_blksize = 512;
-        stat.st_blocks = (attr.size as i64 + 511) / 512;
+        stat.st_blocks = ((attr.size as u64 + 511) / 512) as u32;
 
         Ok(())
     }
@@ -309,24 +307,40 @@ impl File {
             count
         })
     }
+
+    pub fn new_dev(inner: Arc<dyn Inode>) -> Self {
+        Self {
+            inner,
+            openflags: OpenFlags::new_read_write(),
+            offset: 0,
+        }
+    }
+
+    pub fn mount(&self, path: &str) -> Result<usize, VfsError> {
+       unimplemented!()
+    }
 }
 
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Stat {
-    pub st_dev: u64,     // 文件所在设备的ID
-    pub st_ino: u64,     // 文件的inode号
-    pub st_mode: u32,    // 文件类型和权限
-    pub st_nlink: u32,   // 硬链接数
-    pub st_uid: u32,     // 所有者用户ID
-    pub st_gid: u32,     // 所有者组ID
-    pub st_rdev: u64,    // 特殊设备ID（仅设备文件有效）
-    pub st_size: i64,    // 文件大小（字节数）
-    pub st_atime: i64,   // 最后访问时间
-    pub st_mtime: i64,   // 最后修改时间
-    pub st_ctime: i64,   // 最后状态变更时间
-    pub st_blksize: i64, // 文件I/O的块大小
-    pub st_blocks: i64,  // 分配的磁盘块数
+    pub st_dev: u64,      // 文件所在设备的ID
+    pub st_ino: u64,      // 文件的inode号
+    pub st_mode: u32,     // 文件类型和权限
+    pub st_nlink: u32,    // 硬链接数
+    pub st_uid: u32,      // 所有者用户ID
+    pub st_gid: u32,      // 所有者组ID
+    pub st_rdev: u64,     // 特殊设备ID（仅设备文件有效）
+    pub st_size: u64,     // 文件大小（字节数）
+    pub st_atime_sec: u64, // 最后访问时间（秒）
+    pub st_atime_nsec: u64, // 最后访问时间（纳秒）
+    pub st_mtime_sec: u64, // 最后修改时间（秒）
+    pub st_mtime_nsec: u64, // 最后修改时间（纳秒）
+    pub st_ctime_sec: u64, // 最后状态变更时间（秒）
+    pub st_ctime_nsec: u64, // 最后状态变更时间（纳秒）
+    pub st_blksize: u32,  // 文件I/O的块大小
+    pub st_blocks: u32,   // 分配的磁盘块数
+    pub st_padding: u32,  // 填充
 }
 
 impl Stat {

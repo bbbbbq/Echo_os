@@ -1,7 +1,7 @@
 [workspace]
 members = [ "component/UintAllocator", "component/bitmap", "component/boot", "component/config", 
     "component/console", "component/driver/device", "component/driver/virtio", "component/driver/api", "component/filesystem", "component/frame", 
-    "component/heap", "kernel", "component/arch", "component/mem" , "component/trap", "component/timer", "component/elf_ext",
+    "component/heap", "kernel", "component/arch", "component/mem" , "component/trap", "component/timer", "component/elf_ext", "component/struct_define",
 ]
 resolver = "2"
 
@@ -41,3 +41,5 @@ trap = {path = "component/trap"}
 elf_ext = { path = "component/elf_ext"}
 async-recursion = "1.1.0"
 timer = { path = "component/timer" }
+struct_define = { path = "component/struct_define"}
+

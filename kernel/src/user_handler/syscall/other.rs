@@ -1,9 +1,16 @@
+use crate::executor::sync::Sleep;
 use crate::user_handler::handler::UserHandler;
 use crate::executor::error::TaskError;
 use crate::user_handler::userbuf::UserBuf;
+use console::println;
 use log::debug;
+use struct_define::tms::TMS;
 use core::time::Duration;
 use timer::get_time;
+use struct_define::timespec::TimeSpec;
+use struct_define::uname::UTSname;
+
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TimeVal {
@@ -32,6 +39,61 @@ impl UserHandler {
         );
         let time= get_time();
         tv_ptr.write(time.into());
+        Ok(0)
+    }
+
+    pub async fn sys_nanosleep(&self, req: UserBuf<TimeSpec>, _rem: UserBuf<TimeSpec>) -> Result<usize, TaskError> {
+
+        let req = req.read();
+        let _rem = _rem.read();
+
+        let duration = Duration::from_secs(req.sec as u64) + Duration::from_nanos(req.nsec as u64);
+        let sleep = Sleep { time: duration };
+        sleep.await;
+        Ok(0)
+    }
+
+    pub async fn sys_times(&self, tms_ptr: UserBuf<TMS>) -> Result<usize, TaskError> {
+        const CLK_TCK: u128 = 100;
+        debug!("sys_times @ tms_ptr: {}", tms_ptr);
+        let duration = get_time();
+        let total_ticks = duration.as_nanos() * CLK_TCK / 1_000_000_000;
+        let tms = TMS {
+            utime: 0, // TODO: track user time
+            stime: total_ticks as u64,
+            cutime: 0,
+            cstime: 0,
+        };
+        // println!("duration: {:?}", duration);
+        // println!("sys_times @ tms: {:#?}", tms);
+        tms_ptr.write(tms);
+        Ok(0)
+    }
+
+    pub async fn sys_uname(&self, buf_ptr: UserBuf<UTSname>) -> Result<usize, TaskError> {
+        debug!("sys_uname @ uts_ptr: {}", buf_ptr);
+
+        let mut uts = UTSname::new();
+
+        let sys_name = b"Linux";
+        uts.sysname[..sys_name.len()].copy_from_slice(sys_name);
+
+        let sys_nodename = b"debian";
+        uts.nodename[..sys_nodename.len()].copy_from_slice(sys_nodename);
+
+        let sys_release = b"5.10.0-7-riscv64";
+        uts.release[..sys_release.len()].copy_from_slice(sys_release);
+
+        let sys_version = b"#1 SMP Debian 5.10.40-1 (2021-05-28)";
+        uts.version[..sys_version.len()].copy_from_slice(sys_version);
+
+        let sys_machine = b"riscv qemu";
+        uts.machine[..sys_machine.len()].copy_from_slice(sys_machine);
+
+        // domainname is already all zeros from default(), which is a valid empty C string.
+
+        buf_ptr.write(uts);
+
         Ok(0)
     }
 }

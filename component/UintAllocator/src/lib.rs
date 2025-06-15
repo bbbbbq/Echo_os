@@ -2,7 +2,6 @@
 extern crate alloc;
 use alloc::vec;
 use alloc::vec::Vec;
-use spin::Mutex;
 
 // Re-export dependencies needed by the macro
 pub use lazy_static::lazy_static;

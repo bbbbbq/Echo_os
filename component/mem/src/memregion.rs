@@ -1,4 +1,4 @@
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use memory_addr::{MemoryAddr, PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange};
 use page_table_multiarch::MappingFlags;
 use super::pagetable::PageTable;
@@ -112,6 +112,56 @@ impl MemRegion {
     }
     pub fn map_user_frame(&mut self, page_table: &mut PageTable) {
         page_table.map_region_user_frame(self);
+    }
+
+    pub fn sub_region(&self, start_vaddr: usize, size:usize) -> (Self, Self)
+    {
+        let end_vaddr = start_vaddr + size;
+        let region_start = self.vaddr_range.start.as_usize();
+        let region_end = self.vaddr_range.end.as_usize();
+        
+        assert!(region_start <= start_vaddr && end_vaddr <= region_end, 
+                "sub_region range must be within the original region");
+        
+        let left = Self {
+            vaddr_range: VirtAddrRange::new(
+                VirtAddr::from(region_start),
+                VirtAddr::from(start_vaddr),
+            ),
+            paddr_range: self.paddr_range.map(|range| {
+                let offset = start_vaddr - region_start;
+                PhysAddrRange::new(
+                    range.start,
+                    range.start.add(offset),
+                )
+            }),
+            pte_flags: self.pte_flags,
+            name: self.name.clone(),
+            region_type: self.region_type,
+            is_mapped: self.is_mapped,
+            frames: None,
+        };
+        
+        let right = Self {
+            vaddr_range: VirtAddrRange::new(
+                VirtAddr::from(end_vaddr),
+                VirtAddr::from(region_end),
+            ),
+            paddr_range: self.paddr_range.map(|range| {
+                let offset = end_vaddr - region_start;
+                PhysAddrRange::new(
+                    range.start.add(offset),
+                    range.end,
+                )
+            }),
+            pte_flags: self.pte_flags,
+            name: self.name.clone(),
+            region_type: self.region_type,
+            is_mapped: self.is_mapped,
+            frames: None,
+        };
+        
+        (left, right)
     }
 }
 

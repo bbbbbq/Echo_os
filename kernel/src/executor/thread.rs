@@ -2,7 +2,7 @@ use super::id_alloc::TaskId;
 use crate::alloc::string::ToString;
 use crate::executor::executor::get_cur_usr_task;
 use crate::executor::executor::{GLOBLE_EXECUTOR, release_task};
-use crate::executor::id_alloc::{self, alloc_tid};
+use crate::executor::id_alloc::alloc_tid;
 use crate::executor::task::{AsyncTask, AsyncTaskItem};
 use crate::user_handler::entry::user_entry;
 use alloc::borrow::ToOwned;
@@ -18,9 +18,9 @@ use filesystem::fd_table::FdTable;
 use filesystem::file::File;
 use filesystem::path::Path;
 use heap::HeapUser;
-use log::{debug, info};
+use log::info;
 use mem::memset::MemSet;
-use mem::pagetable::{self, PageTable};
+use mem::pagetable::PageTable;
 use memory_addr::{VirtAddr, VirtAddrRange};
 use spin::{Mutex, MutexGuard, RwLock};
 use trap::trapframe::TrapFrame;
@@ -147,10 +147,10 @@ impl UserTask {
         let cx = UserTask::init_cx(load_elf_return.clone());
         info!("load_elf_return: {:?}", load_elf_return);
         let mut pagetable = PageTable::new();
-        pagetable.restore();
+        let _ = pagetable.restore();
         for region in load_elf_return.memset.regions.iter_mut() {
             info!("region: {:?}", region);
-            pagetable.map_region_user(region);
+            let _ = pagetable.map_region_user(region);
             region.is_mapped = true;
         }
         // Initialize task based on load_elf_return information
