@@ -50,6 +50,7 @@ pub struct ProcessControlBlock {
 #[derive(Clone)]
 pub struct ThreadControlBlock {
     pub cx: TrapFrame,
+    pub clear_child_tid: Option<usize>,
     pub thread_exit_code: Option<usize>,
 }
 
@@ -105,6 +106,7 @@ impl UserTask {
         let parent = RwLock::new(parent);
         let tcb = RwLock::new(ThreadControlBlock {
             cx: TrapFrame::new(),
+            clear_child_tid: None,
             thread_exit_code: None,
         });
         Arc::new(UserTask {
@@ -177,6 +179,7 @@ impl UserTask {
             tcb: RwLock::new(ThreadControlBlock {
                 cx: cx,
                 thread_exit_code: None,
+                clear_child_tid: None,
             }),
         });
 
@@ -320,6 +323,7 @@ impl UserTask {
         let cur_tcb = RwLock::new(ThreadControlBlock {
             cx: parent.cx.clone(),
             thread_exit_code: None,
+            clear_child_tid: None,
         });
         cur_tcb.write().cx[TrapFrameArgs::RET] = 0;
 
@@ -352,6 +356,7 @@ impl UserTask {
         let new_tcb = RwLock::new(ThreadControlBlock {
             cx: parent_tcb.cx.clone(),
             thread_exit_code: None,
+            clear_child_tid: None,
         });
         new_tcb.write().cx[TrapFrameArgs::RET] = 0; // Return 0 for child process
 

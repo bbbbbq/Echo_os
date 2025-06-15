@@ -1,4 +1,4 @@
-use crate::path::Path;
+use crate::path::{self, Path};
 use crate::vfs::{FileSystem, Inode};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -12,11 +12,11 @@ lazy_static! {
 #[derive(Clone)]
 pub struct MountNode {
     pub root_inner: Arc<dyn Inode>,
-    pub fs: Arc<dyn FileSystem>,
+    pub fs: Option<Arc<dyn FileSystem>>,
 }
 
 impl MountNode {
-    pub fn new(fs: Arc<dyn FileSystem>, root: Arc<dyn Inode>) -> Self {
+    pub fn new(fs: Option<Arc<dyn FileSystem>>, root: Arc<dyn Inode>) -> Self {
         MountNode {
             root_inner: root,
             fs: fs,
@@ -31,7 +31,7 @@ impl MountNode {
 pub fn mount_fs(fs: Arc<dyn FileSystem>, path: Path) {
     trace!("Mounting filesystem at path: {:?}", path);
     if let Some(root) = fs.root_inode() {
-        let mount_node = MountNode::new(fs, root);
+        let mount_node = MountNode::new(Some(fs), root);
         MOUNT_LIST.lock().push((path, mount_node));
         trace!("Filesystem mounted successfully");
     } else {
@@ -90,4 +90,8 @@ pub fn get_mount_node(path: Path) -> Option<(Path, MountNode)> {
 }
 
 
-// pub fn mount_inode(inode:)
+pub fn mount_inode(inode:Arc<dyn Inode>,path:Path)
+{
+    let mount_node = MountNode::new(None,inode);
+    MOUNT_LIST.lock().push((path, mount_node));
+}

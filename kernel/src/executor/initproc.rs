@@ -44,41 +44,38 @@ async fn command(cmd: &str) {
 
 pub async fn initproc() {
     println!("start kernel tasks");
-    command("brk").await;
-    command("chdir").await;
-    command("clone").await;
-    command("close").await;
-    command("dup").await;
-    command("dup2").await;
-    command("execve").await;
-    command("exit").await;
-    command("fork").await;
-    command("fstat").await;
-    command("getcwd").await;
-    command("getdents").await;
-    command("getpid").await;
-    command("getppid").await;
-    command("gettimeofday").await;
-    command("mkdir").await;
-    command("mmap").await;
-    command("mount").await;
-    command("munmap").await;
-    command("open").await;
-    command("openat").await;
-    command("pipe").await;
-    command("read").await;
-    command("sleep").await;
-    command("times").await;
-    command("umount").await;
-    command("uname").await;
-    command("unlink").await;
-    command("wait").await;
-    command("waitpid").await;
-    command("yield").await;
-
-
-
-
+    command("busybox").await;
+    // command("brk").await;
+    // command("chdir").await;
+    // command("clone").await;
+    // command("close").await;
+    // command("dup").await;
+    // command("dup2").await;
+    // command("execve").await;
+    // command("exit").await;
+    // command("fork").await;
+    // command("fstat").await;
+    // command("getcwd").await;
+    // command("getdents").await;
+    // command("getpid").await;
+    // command("getppid").await;
+    // command("gettimeofday").await;
+    // command("mkdir").await;
+    // command("mmap").await;
+    // command("mount").await;
+    // command("munmap").await;
+    // command("open").await;
+    // command("openat").await;
+    // command("pipe").await;
+    // command("read").await;
+    // command("sleep").await;
+    // command("times").await;
+    // command("umount").await;
+    // command("uname").await;
+    // command("unlink").await;
+    // command("wait").await;
+    // command("waitpid").await;
+    // command("yield").await;
 
     // Shutdown if there just have blankkernel task.
     if TASK_MAP

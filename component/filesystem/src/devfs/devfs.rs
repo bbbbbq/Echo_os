@@ -16,12 +16,33 @@ impl DevFs {
         Self {}
     }
 }
+#[derive(Debug, Clone, Copy)]
+pub enum DevType {
+    Null,
+    Zero,
+    Uart,
+    Block,
+}
 
 #[derive(Debug)]
-pub struct DevFsDirInode;
+pub struct DevFsDirInode
+{
+    dev_type:DevType,
+}
+
 impl DevFsDirInode {
     pub fn new() -> Self {
-        DevFsDirInode
+        DevFsDirInode{
+            dev_type:DevType::Null,
+        }
+    }
+
+    pub fn get_dev_type(&self) -> DevType {
+        self.dev_type
+    }
+
+    pub fn set_dev_type(&mut self, dev_type: DevType) {
+        self.dev_type = dev_type;
     }
 }
 
@@ -101,7 +122,7 @@ impl Inode for DevFsDirInode {
 
 impl FileSystem for DevFs {
     fn root_inode(&self) -> Option<Arc<dyn Inode>> {
-        Some(Arc::new(DevFsDirInode))
+        Some(Arc::new(DevFsDirInode { dev_type: DevType::Null }))
     }
 
     fn get_type(&self) -> FsType {

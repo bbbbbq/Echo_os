@@ -101,11 +101,19 @@ pub struct PipeReceiver {
 
 
 impl Inode for PipeReceiver {
-    fn read_at(&self, _offset: usize, _buf: &mut [u8]) -> VfsResult<usize> {
+        fn read_at(&self, _offset: usize, _buf: &mut [u8]) -> VfsResult<usize> {
         let mut queue = self.queue.lock();
-        if queue.len() == 0 {
-            return Ok(0);
+        if queue.is_empty() {
+            if Weak::strong_count(&self.sender) > 0 {
+                // 写入端还存在，但管道是空的，返回 Again
+                return Err(VfsError::Again);
+            } else {
+                // 写入端已关闭，管道也是空的，返回 EOF
+                return Ok(0);
+            }
         }
+
+        // 管道中有数据，正常读取
         let mut i = 0;
         while i < _buf.len() && !queue.is_empty() {
             _buf[i] = queue.pop_front().unwrap();

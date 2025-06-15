@@ -1,14 +1,18 @@
 use crate::executor::error::TaskError;
-use crate::test_ls;
+use crate::executor::ops::yield_now;
+use filesystem::vfs::VfsError;
 use crate::user_handler::handler::UserHandler;
 use crate::user_handler::userbuf::UserBuf;
 use alloc::string::ToString;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 
+use filesystem::devfs::{DevFsDirInode, DevType};
+use filesystem::file::OpenFlags;
 use filesystem::file::{File, Stat};
+use filesystem::mount::{mount_inode, umount_fs};
 use filesystem::path::Path;
 use filesystem::pipe::create_pipe;
-use filesystem::file::OpenFlags;
 use filesystem::vfs::{DirEntry, FileType};
 use log::debug;
 
@@ -125,7 +129,7 @@ impl UserHandler {
 
         let file = cwd.open_at(&filename, flags)?;
         let fd = self.task.pcb.lock().fd_table.alloc(file);
-       // test_ls();
+        // test_ls();
         Ok(fd as isize)
     }
 
@@ -243,8 +247,16 @@ impl UserHandler {
     ) -> Result<usize, TaskError> {
         let mut file = self.task.get_fd(fd).ok_or(TaskError::EBADF)?;
         let mut buffer = unsafe { core::slice::from_raw_parts_mut(buf_ptr.ptr, count) };
-        file.read(&mut buffer)?;
-        Ok(count)
+        loop {
+            match file.read(&mut buffer) {
+                Ok(read_len) => return Ok(read_len),
+                Err(VfsError::Again) => {
+                    yield_now().await;
+                    continue;
+                }
+                Err(err) => return Err(err.into()),
+            }
+        }
     }
 
     pub async fn sys_pipe2(
@@ -298,6 +310,45 @@ impl UserHandler {
             dir_file.remove(&path_str)?;
         }
 
+        Ok(0)
+    }
+
+        pub async fn sys_mount(
+        &self,
+        source: UserBuf<u8>,
+        target: UserBuf<u8>,
+        fs_type: UserBuf<u8>,
+        flags: usize,
+        data: UserBuf<u8>,
+    ) -> Result<usize, TaskError> {
+        let source_str = source.read_string();
+        let target_str = target.read_string();
+        let fs_type_str = fs_type.read_string();
+        let data_str = if data.ptr.is_null() {
+            alloc::string::String::new()
+        } else {
+            data.read_string()
+        };
+
+        debug!(
+            "sys_mount @ source: {}, target: {}, fs_type: {}, flags: {}, data: {}",
+            source_str,
+            target_str,
+            fs_type_str,
+            flags,
+            data_str
+        );
+        let mut inode = DevFsDirInode::new();
+        inode.set_dev_type(DevType::Null);
+        let path = Path::from(target_str);
+        mount_inode(Arc::new(inode), path);
+        Ok(0)
+    }
+
+    pub async fn sys_umount(&self, target: UserBuf<u8>) -> Result<usize, TaskError> {
+        let target_str = target.read_string();
+        let path = Path::from(target_str);
+        umount_fs(path);
         Ok(0)
     }
 }

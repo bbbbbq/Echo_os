@@ -38,6 +38,7 @@ pub enum VfsError {
     Busy,
     BadFileDescriptor,
     InvalidOperation,
+    Again,
 }
 
 

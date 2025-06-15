@@ -133,6 +133,18 @@ impl UserHandler {
                 let timezone_ptr = _args[1];
                 self.sys_gettimeofday(tv_ptr, timezone_ptr).await
             }
+            sysnum::SYS_MOUNT => {
+                let source = UserBuf::new(_args[0] as *mut u8);
+                let target = UserBuf::new(_args[1] as *mut u8);
+                let filesystem_type = UserBuf::new(_args[2] as *mut u8);
+                let mount_flags = _args[3];
+                let data = UserBuf::new(_args[4] as *mut u8);
+                self.sys_mount(source, target, filesystem_type, mount_flags, data).await
+            }
+            sysnum::SYS_UMOUNT2 => {
+                let target = UserBuf::new(_args[0] as *mut u8);
+                self.sys_umount(target).await
+            }
             sysnum::SYS_MMAP => {
                 let addr = _args[0];
                 let len = _args[1];
@@ -180,8 +192,6 @@ impl UserHandler {
                 error!("Invalid syscall");
                 loop {}
             }
-
-
         }
     }
 }
