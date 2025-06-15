@@ -6,7 +6,7 @@ use trap::trapframe::{TrapFrame, TrapFrameArgs};
 pub mod sysnum;
 use crate::executor::error::TaskError;
 use crate::executor::task::AsyncTask;
-
+use crate::user_handler::syscall::other::TimeVal;
 use crate::user_handler::userbuf::UserBuf;
 use log::error;
 use log::info;
@@ -14,6 +14,7 @@ use filesystem::file::Stat;
 pub mod fs;
 pub mod mem;
 pub mod proc;
+pub mod other;
 
 impl UserHandler {
     pub async fn handle_syscall(&mut self, cx_ref: &mut TrapFrame) -> UserTaskControlFlow {
@@ -49,7 +50,7 @@ impl UserHandler {
     pub async fn syscall(&mut self, call_id: usize, _args: [usize; 6]) -> Result<usize, TaskError> {
         info!("[syscall] id: {}, args: {:?}", call_id, _args);
         match call_id {
-            sysnum::SYS_EXIT => self.sys_exit(_args[0].try_into().unwrap()).await,
+            sysnum::SYS_EXIT => self.sys_exit(_args[0].try_into().unwrap_or(1)).await,
             sysnum::SYS_BRK => self.sys_brk(_args[0]).await,
             sysnum::SYS_WRITE => self.sys_write(_args[0], _args[1].into(), _args[2]).await,
             sysnum::SYS_CLOSE => self.sys_close(_args[0]).await,
@@ -123,6 +124,20 @@ impl UserHandler {
             }
             sysnum::SYS_GETPPID => {
                 self.sys_getppid().await
+            }
+            sysnum::SYS_GETTIMEOFDAY => {
+                let tv_ptr = UserBuf::new(_args[0] as *mut TimeVal);
+                let timezone_ptr = _args[1];
+                self.sys_gettimeofday(tv_ptr, timezone_ptr).await
+            }
+            sysnum::SYS_MMAP => {
+                let addr = _args[0];
+                let len = _args[1];
+                let prot = _args[2];
+                let flags = _args[3];
+                let fd = _args[4];
+                let offset = _args[5];
+                self.sys_mmap(addr, len, prot, flags, fd, offset).await
             }
             _ => {
                 info!("call_id : {}", call_id);

@@ -491,12 +491,15 @@ impl Inode for Ext4FileWrapper {
         }
 
         let mut file = self.inner.lock();
-        if file.check_inode_exist(path_str, InodeTypes::EXT4_DE_REG_FILE)
-            || file.check_inode_exist(path_str, InodeTypes::EXT4_DE_DIR)
-        {
+        if file.check_inode_exist(path_str, InodeTypes::EXT4_DE_REG_FILE) {
             Ok(Arc::new(Ext4FileWrapper::new(
                 path_str,
                 InodeTypes::EXT4_DE_REG_FILE,
+            )))
+        } else if file.check_inode_exist(path_str, InodeTypes::EXT4_DE_DIR) {
+            Ok(Arc::new(Ext4FileWrapper::new(
+                path_str,
+                InodeTypes::EXT4_DE_DIR,
             )))
         } else {
             Err(crate::vfs::VfsError::NotFound)

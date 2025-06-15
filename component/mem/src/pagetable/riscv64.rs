@@ -94,6 +94,7 @@ impl PageTable {
             pte_flags: MappingFlags::READ | MappingFlags::WRITE,
             region_type: MemRegionType::DATA,
             is_mapped: false,
+            frames: None,
         };
         self.map_region_user(&mut mem_region);
 
@@ -106,6 +107,7 @@ impl PageTable {
             pte_flags: MappingFlags::READ | MappingFlags::WRITE,
             region_type: MemRegionType::DATA,
             is_mapped: false,
+            frames: None,
         };
         self.map_region_user(&mut mem_region);
 
@@ -156,8 +158,8 @@ impl PageTable {
         change_pagetable(self.page_table.root_paddr().as_usize())
     }
 
-    pub fn map_region_user(&mut self, region: &mut MemRegion) {
-        info!("region : {:?}",region);
+    pub fn map_region_user(&mut self, region: &mut MemRegion) -> Result<(), ()> {
+        info!("region : {:?}", region);
         if let Some(paddr_range) = region.paddr_range {
             let start_vaddr = region.vaddr_range.start;
             let size = region.vaddr_range.size();
@@ -166,14 +168,15 @@ impl PageTable {
                 paddr_range.start.add(offset)
             };
 
-            let _ = self
-                .page_table
+            self.page_table
                 .map_region(start_vaddr, get_paddr, size, region.pte_flags, true, true)
-                .expect("Failed to map region in page table");
+                .map_err(|_e| ())?;
 
             region.is_mapped = true;
+            Ok(())
         } else {
-            error!("Failed to map region in page table");
+            error!("Failed to map region in page table because paddr_range is None");
+            Err(())
         }
     }
 

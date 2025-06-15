@@ -13,6 +13,8 @@ use heap;
 // define module removed
 use log::{error, info};
 extern crate alloc;
+use alloc::vec::Vec;
+use filesystem::vfs::DirEntry;
 pub mod executor;
 use crate::alloc::string::ToString;
 use boot;
@@ -50,6 +52,7 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     init_fs();
 
     info!("\n\n\\n\n\n\n\n");
+    // test_ls();
     spawn_blank(initproc());
     info_task_queue();
     GLOBLE_EXECUTOR.run();
@@ -58,53 +61,12 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     loop {}
 }
 
-pub fn test_file() {
-    info!("Attempting to open /hello.txt");
-    let path = Path::new("/hello.txt".to_string());
-    let flags = OpenFlags::O_RDONLY;
-
-    match File::open(&path.to_string(), flags) {
-        Ok(_file) => {
-            info!("Successfully opened /hello.txt");
-            let mut buffer = [0u8; 64]; // Buffer to read file content
-            match _file.read_at(0, &mut buffer) {
-                Ok(bytes_read) => {
-                    if bytes_read > 0 {
-                        // Attempt to convert the read bytes to a UTF-8 string
-                        match core::str::from_utf8(&buffer[..bytes_read]) {
-                            Ok(s) => {
-                                info!("Content of /hello.txt: \"{}\"", s.trim_end_matches('\0'))
-                            }
-                            Err(_) => error!("Content of /hello.txt is not valid UTF-8"),
-                        }
-                    } else {
-                        info!("/hello.txt is empty or read 0 bytes.");
-                    }
-                }
-                Err(e) => error!("Failed to read /hello.txt: {:?}", e),
-            }
-
-            // Test get_file_size for /hello.txt
-            match _file.get_file_size() {
-                Ok(size) => {
-                    if size == 48 {
-                        // Expected size for hello.txt
-                        info!("/hello.txt get_file_size returned {} as expected.", size);
-                    } else {
-                        error!("/hello.txt get_file_size returned {}, expected 48.", size);
-                    }
-                }
-                Err(e) => error!("Failed to get_file_size for /hello.txt: {:?}", e),
-            }
-        }
-        Err(e) => {
-            error!("Failed to open /hello.txt: {:?}", e);
-        }
+pub fn test_ls() {
+    let file = File::open(&"/".to_string(), OpenFlags::O_DIRECTORY | OpenFlags::O_RDWR).unwrap();
+    let mut buffer = Vec::<DirEntry>::new();
+    file.getdents(&mut buffer).unwrap();
+    for entry in buffer {
+        println!("{}", entry.filename);
     }
+    // os_shut_down();
 }
-
-// pub fn test_thread() {
-//     let path = Path::new("/test/hello".to_string());
-//     let file = File::open(path, OpenFlags::O_RDONLY).unwrap();
-//     let _thread = proc::thread::Thread::new_thread(file, vec![], "hello".to_string(), vec![]);
-// }

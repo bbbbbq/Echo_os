@@ -1,6 +1,5 @@
 use std::{env, fs, io::Result, path::Path};
 
-const LOGLEVEL: &str = "error";
 
 fn main() -> Result<()> {
     println!("cargo:rerun-if-changed=linker.ld");

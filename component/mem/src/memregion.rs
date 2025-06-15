@@ -2,6 +2,8 @@ use alloc::string::{String, ToString};
 use memory_addr::{MemoryAddr, PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange};
 use page_table_multiarch::MappingFlags;
 use super::pagetable::PageTable;
+use alloc::vec::Vec;
+use frame::FrameTracer;
 
 #[derive(Debug,Clone, Copy)]
 pub enum MemRegionType {
@@ -12,6 +14,7 @@ pub enum MemRegionType {
     STACK,
     HEAP,
     ANONYMOUS,
+    MMAP,
 }
 
 /// Memory region
@@ -23,6 +26,7 @@ pub struct MemRegion {
     pub name: String,
     pub region_type: MemRegionType,
     pub is_mapped: bool,
+    pub frames: Option<Vec<FrameTracer>>,
 }
 
 impl core::fmt::Display for MemRegion {
@@ -49,6 +53,7 @@ impl core::fmt::Debug for MemRegion {
             .field("pte_flags", &self.pte_flags)
             .field("region_type", &self.region_type)
             .field("is_mapped", &self.is_mapped)
+            .field("frames", &self.frames)
             .finish()
     }
 }
@@ -81,6 +86,7 @@ impl MemRegion {
             name,
             region_type,
             is_mapped: false,
+            frames: None,
         }
     }
 
@@ -101,6 +107,7 @@ impl MemRegion {
             name,
             region_type,
             is_mapped: false,
+            frames: None,
         }
     }
     pub fn map_user_frame(&mut self, page_table: &mut PageTable) {

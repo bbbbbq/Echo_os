@@ -7,8 +7,10 @@ pub enum TaskError {
     EINVAL,
     EBADF,
     EMFILE,
+    EFAULT,
     InvalidCloneFlags,
     ECHILD,
+    ENOMEM,
     Vfs(VfsError),
 }
 
@@ -28,7 +30,9 @@ impl TaskError {
             TaskError::EMFILE => "Too many open files",
             TaskError::InvalidCloneFlags => "Invalid clone flags",
             TaskError::ECHILD => "No child process",
+            TaskError::ENOMEM => "Out of memory",
             TaskError::Vfs(_) => "VfsError",
+            TaskError::EFAULT => "Bad address",
         }
     }
 
@@ -41,7 +45,9 @@ impl TaskError {
             TaskError::EBADF => 9, // EBADF
             TaskError::InvalidCloneFlags => 22, // EINVAL
             TaskError::ECHILD => 10, // ECHILD
+            TaskError::ENOMEM => 12, // ENOMEM
             TaskError::Vfs(_) => 2, // ENOENT
+            TaskError::EFAULT => 14, // EFAULT
         }
     }
 }

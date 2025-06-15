@@ -55,7 +55,7 @@ impl File {
                     return Err(VfsError::NotDirectory);
                 }
 
-                if attr.file_type == FileType::Directory && open_flags.is_writable() {
+                if attr.file_type == FileType::Directory && !open_flags.contains(OpenFlags::O_DIRECTORY) && open_flags.is_writable() {
                     return Err(VfsError::IsDirectory);
                 }
 
@@ -165,7 +165,7 @@ impl File {
                     return Err(VfsError::NotDirectory);
                 }
 
-                if attr.file_type == FileType::Directory && open_flags.is_writable() {
+                if attr.file_type == FileType::Directory && !open_flags.contains(OpenFlags::O_DIRECTORY) && open_flags.is_writable() {
                     return Err(VfsError::IsDirectory);
                 }
 
@@ -302,21 +302,11 @@ impl File {
     }
 
 
-    pub fn getdents(&self, buffer: &mut [u8]) -> Result<usize, VfsError> {
+    pub fn getdents(&self, buffer:&mut Vec<DirEntry>) -> Result<usize, VfsError> {
         self.read_dir().map(|entries| {
-            let mut offset = 0;
-            for entry in entries {
-                let entry_size = core::mem::size_of::<DirEntry>();
-                if offset + entry_size > buffer.len() {
-                    break;
-                }
-                let entry_ptr = unsafe { buffer.as_mut_ptr().add(offset) };
-                unsafe {
-                    core::ptr::write(entry_ptr as *mut DirEntry, entry);
-                }
-                offset += entry_size;
-            }
-            offset
+            let count = entries.len();
+            buffer.extend(entries);
+            count
         })
     }
 }

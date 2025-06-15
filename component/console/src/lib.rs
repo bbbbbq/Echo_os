@@ -1,7 +1,7 @@
 #![no_std]
 
 #[cfg(target_arch = "riscv64")]
-mod riscv64;
+pub mod riscv64;
 #[cfg(target_arch = "riscv64")]
 pub use riscv64::*;
 
@@ -25,7 +25,7 @@ impl Log for NoStdLogger {
 
     fn log(&self, record: &Record) {
         use core::fmt::Write;
-        let mut writer = crate::DebugWriter;
+        let mut writer = riscv64::DebugWriter;
 
         let color = match record.level() {
             Level::Error => COLOR_RED,
@@ -55,7 +55,7 @@ macro_rules! println {
     () => ($crate::print!("\n"));
     ($($arg:tt)*) => ({
         use core::fmt::Write;
-        let mut writer = $crate::DebugWriter;
+        let mut writer = $crate::riscv64::DebugWriter;
         let _ = writeln!(writer, $($arg)*);
     })
 }
@@ -64,7 +64,7 @@ macro_rules! println {
 macro_rules! print {
     ($($arg:tt)*) => ({
         use core::fmt::Write;
-        let mut writer = $crate::DebugWriter;
+        let mut writer = $crate::riscv64::DebugWriter;
         let _ = write!(writer, $($arg)*);
     })
 }
