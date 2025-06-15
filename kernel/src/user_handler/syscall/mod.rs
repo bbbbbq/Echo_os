@@ -187,6 +187,7 @@ impl UserHandler {
             }
             sysnum::SYS_UNAME => self.sys_uname(UserBuf::new(_args[0] as *mut UTSname)).await,
             sysnum::SYS_SCHED_YIELD => self.sys_sched_yield().await,
+            sysnum::SYS_SET_TID_ADDRESS => self.sys_set_tid_address(UserBuf::new(_args[0] as *mut u32)).await,
             _ => {
                 info!("call_id : {}", call_id);
                 error!("Invalid syscall");

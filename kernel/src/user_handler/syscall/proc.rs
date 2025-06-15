@@ -209,4 +209,11 @@ impl UserHandler {
         yield_now().await;
         Ok(0)
     }
+
+    pub async fn sys_set_tid_address(&self, tid_address: UserBuf<u32>) -> Result<usize, TaskError> {
+        debug!("sys_set_tid_address @ tid_address: {:?}", tid_address);
+        let tid_address = tid_address.read();
+        self.task.tcb.write().clear_child_tid = Some(tid_address.try_into().unwrap());
+        Ok(self.tid.0)
+    }
 }
