@@ -1,4 +1,5 @@
 use crate::executor::error::TaskError;
+use crate::executor::ops::yield_now;
 use crate::user_handler::handler::UserHandler;
 use log::{debug, warn};
 use crate::executor::task::{AsyncTask, CloneFlags};
@@ -201,5 +202,11 @@ impl UserHandler {
             Some(parent) => Ok(parent.process_id.0),
             None => Ok(-1_isize as usize),
         }
+    }
+
+    pub async fn sys_sched_yield(&self) -> Result<usize, TaskError> {
+        debug!("sys_sched_yield @ ");
+        yield_now().await;
+        Ok(0)
     }
 }

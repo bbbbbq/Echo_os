@@ -167,12 +167,20 @@ impl UserHandler {
                 let tms_ptr = UserBuf::new(_args[0] as *mut TMS);
                 self.sys_times(tms_ptr).await
             }
+            sysnum::SYS_UNLINKAT => {
+                let dir_fd = _args[0] as isize;
+                let path = UserBuf::new(_args[1] as *mut u8);
+                let flags = _args[2];
+                self.sys_unlinkat(dir_fd, path, flags).await
+            }
             sysnum::SYS_UNAME => self.sys_uname(UserBuf::new(_args[0] as *mut UTSname)).await,
+            sysnum::SYS_SCHED_YIELD => self.sys_sched_yield().await,
             _ => {
                 info!("call_id : {}", call_id);
                 error!("Invalid syscall");
                 loop {}
             }
+
 
         }
     }

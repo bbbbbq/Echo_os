@@ -5,7 +5,7 @@ extern crate alloc;
 use alloc::string::ToString;
 use alloc::format;
 use config::target::plat::PAGE_SIZE;
-use filesystem::{file::File, path::Path, vfs::OpenFlags};
+use filesystem::{file::{File, OpenFlags}, path::Path};
 use frame::alloc_continues;
 use log::debug;
 use mem::memregion::MemRegionType;

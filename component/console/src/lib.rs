@@ -72,7 +72,7 @@ macro_rules! print {
 pub fn init() {
     static LOGGER: NoStdLogger = NoStdLogger;
 
-    let log_level = LevelFilter::Trace;
+    let log_level = LevelFilter::debug;
 
     set_logger(&LOGGER).unwrap();
     set_max_level(log_level);

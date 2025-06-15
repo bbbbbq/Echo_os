@@ -40,66 +40,7 @@ pub enum VfsError {
     InvalidOperation,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct OpenFlags(pub u32);
 
-impl OpenFlags {
-    // Access mode flags
-    pub const O_RDONLY: Self = Self(0o0);
-    pub const O_WRONLY: Self = Self(0o1);
-    pub const O_RDWR: Self = Self(0o2);
-
-    // Creation and file status flags
-    pub const O_CREAT: Self = Self(0o100);
-    pub const O_EXCL: Self = Self(0o200);
-    pub const O_NOCTTY: Self = Self(0o400);
-    pub const O_TRUNC: Self = Self(0o1000);
-    pub const O_APPEND: Self = Self(0o2000);
-    pub const O_NONBLOCK: Self = Self(0o4000);
-    pub const O_DSYNC: Self = Self(0o10000);
-    pub const O_SYNC: Self = Self(0o4010000);
-    pub const O_RSYNC: Self = Self(0o4010000);
-    pub const O_DIRECTORY: Self = Self(0o200000);
-    pub const O_NOFOLLOW: Self = Self(0o400000);
-    pub const O_CLOEXEC: Self = Self(0o2000000);
-    pub const O_DIRECT: Self = Self(0o40000);
-    pub const O_NOATIME: Self = Self(0o1000000);
-    pub const O_PATH: Self = Self(0o10000000);
-    pub const O_TMPFILE: Self = Self(0o20200000);
-}
-
-impl core::ops::BitOr for OpenFlags {
-    type Output = Self;
-    fn bitor(self, rhs: Self) -> Self::Output {
-        Self(self.0 | rhs.0)
-    }
-}
-
-impl OpenFlags {
-    pub fn new_read_write() -> Self
-    {
-        let inner: u32 = Self::O_RDONLY.0 | Self::O_WRONLY.0;
-        Self(inner)
-    }
-
-    pub fn is_readable(&self) -> bool {
-        let mode = self.0 & 0o3;
-        mode == Self::O_RDONLY.0 || mode == Self::O_RDWR.0
-    }
-
-    pub fn is_writable(&self) -> bool {
-        let mode = self.0 & 0o3;
-        mode == Self::O_WRONLY.0 || mode == Self::O_RDWR.0
-    }
-
-    pub fn contains(&self, flags: OpenFlags) -> bool {
-        (self.0 & flags.0) == flags.0
-    }
-
-    pub fn from_bits_truncate(bits: u32) -> Self {
-        Self(bits)
-    }
-}
 
 pub type VfsResult<T> = Result<T, VfsError>;
 
@@ -170,7 +111,7 @@ pub trait Inode: DowncastSync + Send + Sync + core::fmt::Debug {
         Err(VfsError::NotSupported)
     }
 
-    fn poll(&self, event: PollEvent) -> VfsResult<PollEvent> {
+    fn poll(&self, _event: PollEvent) -> VfsResult<PollEvent> {
         Err(VfsError::NotSupported)
     }
 }

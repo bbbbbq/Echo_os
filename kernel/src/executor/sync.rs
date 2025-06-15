@@ -3,7 +3,7 @@ use crate::executor::id_alloc::TaskId;
 use crate::executor::thread::UserTask;
 use alloc::sync::Arc;
 use timer::get_time;
-use core::future::{self, Future};
+use core::future::{Future};
 use core::pin::Pin;
 use core::task::{Context, Poll};
 use core::time::Duration;

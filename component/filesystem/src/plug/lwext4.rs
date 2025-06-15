@@ -11,9 +11,8 @@ use virtio_drivers::transport::mmio::MmioTransport;
 
 use lwext4_rust::{Ext4BlockWrapper, Ext4File, InodeTypes, KernelDevOp};
 // device::define::BlockDriver is already imported above and used by try_get_block_driver
-use crate::vfs::{
-    DirEntry, FileAttr, FileSystem, FileType, FsType, Inode, OpenFlags, VfsError, VfsResult,
-};
+use crate::file::OpenFlags;
+use crate::vfs::{DirEntry, FileAttr, FileSystem, FileType, FsType, Inode, VfsError, VfsResult};
 use alloc::ffi::CString;
 use alloc::string::ToString;
 use alloc::sync::Arc;
@@ -416,7 +415,7 @@ impl Inode for Ext4FileWrapper {
         let path = file.get_path();
         let path = path.to_str().unwrap();
 
-        match file.file_open(path, OpenFlags::O_RDONLY.0) {
+        match file.file_open(path, OpenFlags::O_RDONLY.bits() as u32) {
             Ok(_) => {}
             Err(_) => return Err(crate::vfs::VfsError::IoError),
         }

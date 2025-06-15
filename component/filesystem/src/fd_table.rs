@@ -1,4 +1,4 @@
-use super::file::File;
+use super::file::{File, OpenFlags};
 use alloc::collections::BTreeMap;
 use log::warn;
 use alloc::sync::Arc;
@@ -16,21 +16,21 @@ impl FdTable {
             0,
             File::new(
                 Arc::new(crate::devfs::uart::UartDev::new()),
-                crate::vfs::OpenFlags::O_RDONLY,
+                OpenFlags::O_RDONLY,
             ),
         ); // stdin
         table.insert(
             1,
             File::new(
                 Arc::new(crate::devfs::uart::UartDev::new()),
-                crate::vfs::OpenFlags::O_WRONLY,
+                OpenFlags::O_WRONLY,
             ),
         ); // stdout
         table.insert(
             2,
             File::new(
                 Arc::new(crate::devfs::uart::UartDev::new()),
-                crate::vfs::OpenFlags::O_WRONLY,
+                OpenFlags::O_WRONLY,
             ),
         ); // stderr
         Self { table }

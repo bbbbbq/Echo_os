@@ -4,14 +4,14 @@ use crate::user_handler::handler::UserHandler;
 use crate::user_handler::userbuf::UserBuf;
 use alloc::string::ToString;
 use alloc::vec::Vec;
-use console::println;
+
 use filesystem::file::{File, Stat};
 use filesystem::path::Path;
 use filesystem::pipe::create_pipe;
-use filesystem::vfs::OpenFlags;
+use filesystem::file::OpenFlags;
 use filesystem::vfs::{DirEntry, FileType};
 use log::debug;
-use log::info;
+
 use memory_addr::VirtAddr;
 const AT_FDCWD: isize = -100;
 
@@ -53,7 +53,7 @@ impl UserHandler {
             cwd = self.task.get_fd(dirfd as usize).expect("invalid dirfd");
         }
         cwd.mkdir_at(path_str)?;
-        test_ls();
+        //test_ls();
         Ok(0)
     }
 
@@ -102,7 +102,7 @@ impl UserHandler {
     ) -> Result<isize, TaskError> {
         // debug!("sys_openat @ dirfd: {}, filename_ptr: {:?}, flags: {}, mode: {}", dirfd, filename_ptr, flags, mode);
         let filename = filename_ptr.read_string();
-        let flags = OpenFlags::from_bits_truncate(flags as u32);
+        let flags = OpenFlags::from_bits_truncate(flags);
         let mode = mode as u32;
         debug!(
             "sys_openat @ dirfd: {}, filename: {}, flags: {:?}, mode: {}",
@@ -125,6 +125,7 @@ impl UserHandler {
 
         let file = cwd.open_at(&filename, flags)?;
         let fd = self.task.pcb.lock().fd_table.alloc(file);
+       // test_ls();
         Ok(fd as isize)
     }
 
@@ -234,15 +235,23 @@ impl UserHandler {
         Ok(current_total_bytes_in_user_output)
     }
 
-    pub async fn sys_read(&self, fd: usize, buf_ptr: UserBuf<u8>, count: usize) -> Result<usize, TaskError> {
+    pub async fn sys_read(
+        &self,
+        fd: usize,
+        buf_ptr: UserBuf<u8>,
+        count: usize,
+    ) -> Result<usize, TaskError> {
         let mut file = self.task.get_fd(fd).ok_or(TaskError::EBADF)?;
         let mut buffer = unsafe { core::slice::from_raw_parts_mut(buf_ptr.ptr, count) };
         file.read(&mut buffer)?;
         Ok(count)
     }
 
-
-    pub async fn sys_pipe2(&self, fds_ptr: UserBuf<u32>, _unknown: usize) -> Result<usize, TaskError> {
+    pub async fn sys_pipe2(
+        &self,
+        fds_ptr: UserBuf<u32>,
+        _unknown: usize,
+    ) -> Result<usize, TaskError> {
         debug!("sys_pipe2 @ fds_ptr: {}, _unknown: {}", fds_ptr, _unknown);
         let fds = fds_ptr.slice_mut_with_len(2);
 
@@ -253,28 +262,42 @@ impl UserHandler {
         let tx_fd = self.task.pcb.lock().fd_table.alloc(tx_file);
         fds[0] = rx_fd as u32;
         fds[1] = tx_fd as u32;
-        Ok(0)
-    }
-
-    
-    pub async fn sys_mount(
-        &self,
-        special: UserBuf<i8>,
-        dir: UserBuf<i8>,
-        fstype: UserBuf<i8>,
-        flags: usize,
-        data: usize,
-    ) -> Result<usize, TaskError> {
-        // let special = special.get_cstr().map_err(|_| Errno::EINVAL)?;
-        // let dir = dir.get_cstr().map_err(|_| Errno::EINVAL)?;
-        // let fstype = fstype.get_cstr().map_err(|_| Errno::EINVAL)?;
-        // debug!(
-        //     "sys_mount @ special: {}, dir: {}, fstype: {}, flags: {}, data: {:#x}",
-        //     special, dir, fstype, flags, data
         // );
 
         // let dev_node = File::open(special, OpenFlags::RDONLY)?;
         // dev_node.mount(dir)?;
+        Ok(0)
+    }
+
+    pub async fn sys_unlinkat(
+        &self,
+        dir_fd: isize,
+        path: UserBuf<u8>,
+        flags: usize,
+    ) -> Result<usize, TaskError> {
+        const AT_FDCWD: isize = -100;
+        const AT_REMOVEDIR: usize = 0x200;
+
+        let path_str = path.read_string();
+        debug!(
+            "sys_unlinkat @ dir_fd: {}, path: {}, flags: {:#x}",
+            dir_fd, path_str, flags
+        );
+
+        let dir_file = if dir_fd == AT_FDCWD {
+            self.task.get_cwd()
+        } else {
+            self.task.get_fd(dir_fd as usize).ok_or(TaskError::EBADF)?
+        };
+
+        if (flags & AT_REMOVEDIR) != 0 {
+            // This is rmdir
+            dir_file.rmdir(&path_str)?;
+        } else {
+            // This is unlink
+            dir_file.remove(&path_str)?;
+        }
+
         Ok(0)
     }
 }

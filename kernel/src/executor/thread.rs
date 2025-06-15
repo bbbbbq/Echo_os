@@ -283,6 +283,11 @@ impl UserTask {
         self.pcb.lock().fd_table.get(fd).cloned()
     }
 
+    pub fn get_cwd(&self) -> File {
+        let path = self.pcb.lock().curr_dir.clone();
+        File::open(&path.to_string(), filesystem::file::OpenFlags::O_DIRECTORY).unwrap()
+    }
+
     pub fn get_heap(&self) -> HeapUser {
         self.pcb.lock().heap.clone()
     }

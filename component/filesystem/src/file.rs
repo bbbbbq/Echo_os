@@ -1,27 +1,73 @@
 use crate::mount::get_mount_node;
-use crate::vfs::{DirEntry, FileType, Inode, OpenFlags, VfsError, VfsResult};
+use crate::path::Path;
+use crate::vfs::{DirEntry, FileType, Inode, VfsError, VfsResult};
 use alloc::{
     string::ToString,
     sync::Arc,
     vec::Vec,
 };
 use core::fmt::Debug;
+use bitflags::bitflags;
+
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct OpenFlags: usize {
+        const O_RDONLY    = 0o0;
+        const O_WRONLY    = 0o1;
+        const O_RDWR      = 0o2;
+        const O_CREAT     = 0o100;
+        const O_EXCL      = 0o200;
+        const O_NOCTTY    = 0o400;
+        const O_TRUNC     = 0o1000;
+        const O_APPEND    = 0o2000;
+        const O_NONBLOCK  = 0o4000;
+        const O_DSYNC     = 0o10000;
+        const O_SYNC      = 0o4010000;
+        const O_RSYNC     = 0o4010000;
+        const O_DIRECTORY = 0o200000;
+        const O_NOFOLLOW  = 0o400000;
+        const O_CLOEXEC   = 0o2000000;
+        const O_DIRECT    = 0o40000;
+        const O_NOATIME   = 0o1000000;
+        const O_PATH      = 0o10000000;
+        const O_TMPFILE   = 0o20200000;
+    }
+}
+
+impl OpenFlags {
+    pub fn is_readable(&self) -> bool {
+        let mode = self.bits() & 0x3;
+        mode == Self::O_RDONLY.bits() || mode == Self::O_RDWR.bits()
+    }
+
+    pub fn is_writable(&self) -> bool {
+        let mode = self.bits() & 0x3;
+        mode == Self::O_WRONLY.bits() || mode == Self::O_RDWR.bits()
+    }
+
+    pub fn new_read_write() -> Self {
+        Self::O_RDWR
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct File {
     pub inner: Arc<dyn Inode>,
     pub openflags: OpenFlags,
     pub offset: usize,
+    pub path: Path
 }
 
 impl File {
     pub fn open_relative(&self, file_name: &str,open_flags:OpenFlags) -> VfsResult<Self> {
         let current_inode = self.inner.clone();
         let inode = current_inode.lookup(file_name)?;
+        let new_path = self.path.join(file_name);
         Ok(Self {
             inner: inode,
             openflags: open_flags,
             offset: 0,
+            path: new_path,
         })
     }
 
@@ -63,6 +109,7 @@ impl File {
                     inner: inode,
                     openflags: open_flags,
                     offset: 0,
+                    path: Path::from(path),
                 };
 
                 if open_flags.contains(OpenFlags::O_TRUNC) {
@@ -87,6 +134,7 @@ impl File {
                         inner: inode,
                         openflags: open_flags,
                         offset: 0,
+                        path: Path::from(path),
                     })
                 } else {
                     Err(VfsError::NotFound)
@@ -140,6 +188,7 @@ impl File {
                 inner: root_inode,
                 openflags: open_flags,
                 offset: 0,
+                path: Path::from(path),
             });
         }
 
@@ -173,6 +222,7 @@ impl File {
                     inner: inode,
                     openflags: open_flags,
                     offset: 0,
+                    path: Path::from(path),
                 };
 
                 if open_flags.contains(OpenFlags::O_TRUNC) {
@@ -197,6 +247,7 @@ impl File {
                         inner: inode,
                         openflags: open_flags,
                         offset: 0,
+                        path: Path::from(path),
                     })
                 } else {
                     Err(VfsError::NotFound)
@@ -211,6 +262,7 @@ impl File {
             inner,
             openflags,
             offset: 0,
+            path: Path::from(""), // TODO: new function should take a path
         }
     }
 
@@ -299,6 +351,13 @@ impl File {
         Ok(())
     }
 
+    pub fn remove(&self, name: &str) -> VfsResult<()> {
+        self.inner.rm_file(name)
+    }
+
+    pub fn rmdir(&self, name: &str) -> VfsResult<()> {
+        self.inner.rm_dir(name)
+    }
 
     pub fn getdents(&self, buffer:&mut Vec<DirEntry>) -> Result<usize, VfsError> {
         self.read_dir().map(|entries| {
@@ -313,11 +372,17 @@ impl File {
             inner,
             openflags: OpenFlags::new_read_write(),
             offset: 0,
+            path: Path::from(""), // Device files do not have a path in the same way
         }
     }
 
-    pub fn mount(&self, path: &str) -> Result<usize, VfsError> {
+    pub fn mount(&self, _path: &str) -> Result<usize, VfsError> {
        unimplemented!()
+    }
+
+    pub fn remove_self(&self) -> VfsResult<()> {
+        let dir = Self::open(&self.path.to_string(), OpenFlags::O_DIRECTORY)?;
+        dir.remove(&self.path.get_name())
     }
 }
 

@@ -5,7 +5,7 @@ use core::panic::PanicInfo;
 use device::init_dt;
 use filesystem::file::File;
 use filesystem::init_fs;
-use filesystem::vfs::OpenFlags;
+use filesystem::file::OpenFlags;
 use heap;
 // Changed to get_block_device
 // define module removed
