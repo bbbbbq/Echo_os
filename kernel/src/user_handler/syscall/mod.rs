@@ -1,5 +1,6 @@
 use super::handler::UserHandler;
 use super::handler::UserTaskControlFlow;
+use log::debug;
 use struct_define::tms::TMS;
 use struct_define::uname::UTSname;
 use trap::trap::EscapeReason;
@@ -22,10 +23,9 @@ use struct_define::timespec::TimeSpec;
 
 impl UserHandler {
     pub async fn handle_syscall(&mut self, cx_ref: &mut TrapFrame) -> UserTaskControlFlow {
+        //debug!("TrapFrame: {:?}", cx_ref);
+
         if matches!(run_user_task(cx_ref), EscapeReason::SysCall) {
-            if cx_ref.get_sysno() == sysnum::SYS_SIGRETURN as _ {
-                return UserTaskControlFlow::Break;
-            }
             info!(
                 "[task {:?}] syscall: {} at sepc: {:#x}",
                 self.task.get_task_id(),
@@ -54,6 +54,7 @@ impl UserHandler {
     pub async fn syscall(&mut self, call_id: usize, _args: [usize; 6]) -> Result<usize, TaskError> {
         info!(" \n\n [syscall] id: {:x} {:?} , args: {:x?} ", call_id,sysnum_to_string(call_id), _args);
         match call_id {
+            sysnum::SYS_FCNTL => self.sys_fcntl(_args[0], _args[1], _args[2]).await,
             sysnum::SYS_EXIT => self.sys_exit(_args[0].try_into().unwrap_or(1)).await,
             sysnum::SYS_BRK => self.sys_brk(_args[0]).await,
             sysnum::SYS_WRITE => self.sys_write(_args[0], _args[1].into(), _args[2]).await,
@@ -208,6 +209,17 @@ impl UserHandler {
             sysnum::SYS_UNAME => self.sys_uname(UserBuf::new(_args[0] as *mut UTSname)).await,
             sysnum::SYS_SCHED_YIELD => self.sys_sched_yield().await,
             sysnum::SYS_SET_TID_ADDRESS => self.sys_set_tid_address(UserBuf::new(_args[0] as *mut u32)).await,
+            sysnum::SYS_FSTATAT => {
+                let dir_fd = _args[0] as isize;
+                let path = UserBuf::new(_args[1] as *mut u8);
+                let statbuf = UserBuf::new(_args[2] as *mut u8);
+                let flags = _args[3];
+                self.sys_fstatat(dir_fd, path, statbuf, flags).await
+            }
+            sysnum::SYS_EXIT_GROUP => {
+                let exit_code = _args[0];
+                self.sys_exit_group(exit_code).await
+            }
             _ => {
                 info!("call_id : {}", call_id);
                 error!("Invalid syscall");

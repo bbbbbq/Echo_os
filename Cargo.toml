@@ -42,4 +42,5 @@ elf_ext = { path = "component/elf_ext"}
 async-recursion = "1.1.0"
 timer = { path = "component/timer" }
 struct_define = { path = "component/struct_define"}
-
+num-derive = "0.4"
+num-traits = { version = "0.2", default-features = false }

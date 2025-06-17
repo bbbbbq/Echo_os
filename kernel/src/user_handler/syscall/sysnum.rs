@@ -94,6 +94,7 @@ pub fn sysnum_to_string(sys_num: usize) -> String {
         SYS_LINKAT => "SYS_LINKAT".into(),
         SYS_UNLINKAT => "SYS_UNLINKAT".into(),
         SYS_UMOUNT2 => "SYS_UMOUNT2".into(),
+        SYS_FCNTL => "SYS_FCNTL".into(),
         SYS_MOUNT => "SYS_MOUNT".into(),
         SYS_STATFS => "SYS_STATFS".into(),
         SYS_FSTATFS => "SYS_FSTATFS".into(),

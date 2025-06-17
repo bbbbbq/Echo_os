@@ -251,4 +251,10 @@ impl UserHandler {
         });
         Ok(0)
     }
+
+    pub async fn sys_exit_group(&self, exit_code: usize) -> Result<usize, TaskError> {
+        debug!("sys_exit_group @ exit_code: {}", exit_code);
+        self.task.exit_group(exit_code);
+        Ok(0)
+    }
 }

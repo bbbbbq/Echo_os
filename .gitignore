@@ -10,10 +10,13 @@ Cargo.lock
 
 # QEMU disk images
 *.img
-
+*.py
+*.txt
+*.md
 # Debug files
 qemu.log
-
+test_mount
+*.log
 # IDE specific files
 .vscode/*
 !.vscode/settings.json

@@ -112,7 +112,6 @@ pub struct LoadElfReturn {
     pub memset: MemSet,
     pub stack_region: StackRegion,
     pub heap_bottom: usize,
-    pub heap_size: usize,
     pub base: usize,
     pub sbss_start:usize,
     pub sbss_size:usize,
@@ -131,7 +130,6 @@ impl core::fmt::Debug for LoadElfReturn {
             .field("entry_point", &format_args!("0x{:x}", self.entry_point))
             .field("memset", &self.memset)
             .field("heap_start", &format_args!("0x{:x}", self.heap_bottom))
-            .field("heap_size", &self.heap_size)
             .finish()
     }
 }
@@ -229,20 +227,20 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
     let heap_paddr_start = alloc_continues(heap_pages)[0].paddr;
     let heap_paddr_end = PhysAddr::from(heap_paddr_start.as_usize() + heap_size);
 
-    let heap_region = MemRegion::new_mapped(
-        heap_start_addr,
-        heap_end_addr,
-        heap_paddr_start,
-        heap_paddr_end,
-        MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE,
-        "user_heap".to_string(),
-        MemRegionType::HEAP,
-    );
-    memset.push_region(heap_region);
-    debug!(
-        "Added user heap: {:?} - {:?}",
-        heap_start_addr, heap_end_addr
-    );
+    // let heap_region = MemRegion::new_mapped(
+    //     heap_start_addr,
+    //     heap_end_addr,
+    //     heap_paddr_start,
+    //     heap_paddr_end,
+    //     MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE,
+    //     "user_heap".to_string(),
+    //     MemRegionType::HEAP,
+    // );
+    // memset.push_region(heap_region);
+    // debug!(
+    //     "Added user heap: {:?} - {:?}",
+    //     heap_start_addr, heap_end_addr
+    // );
 
     let map_base = memset.get_base();
     let base = if elf.header.pt2.type_().as_type() == header::Type::Executable {
@@ -314,7 +312,6 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
         memset,
         stack_region,
         heap_bottom: heap_start_addr.as_usize(),
-        heap_size: config::target::plat::HEAP_SIZE,
         base,
         sbss_start,
         sbss_size,

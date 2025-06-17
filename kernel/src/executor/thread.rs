@@ -143,6 +143,11 @@ impl UserTask {
         self.tcb.write().stack_region.push_bytes(buffer)
     }
 
+    pub fn exit_group(&self, exit_code: usize) {
+        self.tcb.write().thread_exit_code = Some(exit_code);
+        self.pcb.lock().exit_code = Some(exit_code);
+    }
+
     pub fn new_from_file(
         parent: Option<Weak<UserTask>>,
         path: Path,
@@ -187,7 +192,7 @@ impl UserTask {
                 curr_dir,
                 heap: HeapUser::new(VirtAddrRange::new(
                     VirtAddr::from_usize(load_elf_return.heap_bottom),
-                    VirtAddr::from_usize(load_elf_return.heap_bottom + load_elf_return.heap_size),
+                    VirtAddr::from_usize(load_elf_return.heap_bottom),
                 )),
                 entry: load_elf_return.entry_point,
                 threads: vec![],

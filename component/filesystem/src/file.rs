@@ -72,6 +72,15 @@ impl File {
     }
 
     pub fn open_at(&self, path: &str, open_flags: OpenFlags) -> VfsResult<Self> {
+        if path == "." {
+            return Ok(Self {
+                inner: self.inner.clone(),
+                openflags: open_flags,
+                offset: 0,
+                path: self.path.clone(),
+            });
+        }
+
         let components: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
 
         if components.is_empty() {
@@ -383,6 +392,15 @@ impl File {
     pub fn remove_self(&self) -> VfsResult<()> {
         let dir = Self::open(&self.path.to_string(), OpenFlags::O_DIRECTORY)?;
         dir.remove(&self.path.get_name())
+    }
+
+    pub fn find(&self,path:Path) -> VfsResult<File> {
+        if path.is_current()
+        {
+            return Ok(File::new(self.inner.clone(), self.openflags));
+        }
+        let file = self.inner.lookup(&path.get_name())?;
+        Ok(File::new(file, self.openflags))
     }
 }
 

@@ -1,6 +1,9 @@
 use crate::executor::error::TaskError;
 use crate::executor::ops::yield_now;
 use filesystem::vfs::VfsError;
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
+use struct_define::fd::FcntlCmd;
 use crate::user_handler::handler::UserHandler;
 use crate::user_handler::userbuf::UserBuf;
 use alloc::string::ToString;
@@ -120,8 +123,8 @@ impl UserHandler {
         } else {
             self.task.get_fd(dirfd).ok_or(TaskError::EBADF)?
         };
-        // Remove leading dot if present in filename
-        let filename = if filename.starts_with('.') {
+        // Remove leading dot if present in filename, but only if it's not just a single dot
+        let filename = if filename.starts_with('.') && filename != "." {
             filename.strip_prefix('.').unwrap_or(&filename).to_string()
         } else {
             filename
@@ -372,6 +375,53 @@ impl UserHandler {
         _arg: usize,       // 可选参数（可能是用户态缓冲区地址或直接值）
     ) -> Result<usize, TaskError>
     {
+        Ok(0)
+    }
+
+    pub async fn sys_fstatat(&self, dirfd: isize, pathname: UserBuf<u8>, statbuf: UserBuf<u8>,flags: usize) -> Result<usize, TaskError>
+    {
+        debug!("sys_fstatat @ dirfd: {}, pathname: {}, statbuf: {}, flags: {}", dirfd, pathname, statbuf, flags);
+        let path_str = pathname.read_string();
+        let cwd = if dirfd == -100
+        {
+            self.task.get_cwd()
+        }
+        else
+        {
+            self.task.get_fd(dirfd as usize).ok_or(TaskError::EBADF)?
+        };
+        let file = cwd.find(Path::from(path_str))?;
+        let mut state = Stat::new();
+        let _ = file.stat(&mut state);
+        let stat_bytes = unsafe {
+            core::slice::from_raw_parts(
+                &state as *const Stat as *const u8,
+                core::mem::size_of::<Stat>(),
+            )
+        };
+        statbuf.write_slice(stat_bytes);
+        Ok(0)
+    }
+
+    pub async fn sys_fcntl(&self, fd: usize, cmd: usize, arg: usize) -> Result<usize, TaskError> {
+        debug!(
+            "[task {:?}] fcntl: fd: {}, cmd: {:#x}, arg: {}",
+            self.tid, fd, cmd, arg
+        );
+        // let cmd = FromPrimitive::from_usize(cmd).ok_or(TaskError::EINVAL)?;
+        // let mut file = self.task.get_fd(fd).ok_or(TaskError::EBADF)?;
+        // debug!("[task {:?}] fcntl: {:?}", self.tid, cmd);
+        // match cmd {
+        //     FcntlCmd::DUPFD | FcntlCmd::DUPFDCLOEXEC => self.sys_dup(fd).await,
+        //     FcntlCmd::GETFD => Ok(1),
+        //     FcntlCmd::GETFL => Ok(file.openflags.bits()),
+        //     FcntlCmd::SETFL => {
+        //         file.openflags = OpenFlags::from_bits_truncate(arg);
+        //         self.task.pcb.lock().fd_table.set(fd, file);
+        //         Ok(0)
+        //     }
+        //     _ => Ok(0),
+        // }
         Ok(0)
     }
 }

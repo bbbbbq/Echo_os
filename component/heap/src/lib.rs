@@ -3,17 +3,17 @@
 extern crate alloc;
 
 use alloc::string::ToString;
-use config::riscv64_qemu::plat::PAGE_SIZE;
 use buddy_system_allocator::LockedHeap;
+use config::riscv64_qemu::plat::PAGE_SIZE;
 use config::target::plat::HEAP_SIZE;
 use console::println;
-use memory_addr::{PageIter4K, VirtAddr};
 use core::ptr;
 use log::{debug, info};
 use mem::memregion::{MemRegion, MemRegionType};
 use mem::pagetable::PageTable;
 use memory_addr::MemoryAddr;
 use memory_addr::VirtAddrRange;
+use memory_addr::{PageIter4K, VirtAddr};
 use page_table_multiarch::MappingFlags;
 
 // 堆空间
@@ -48,16 +48,16 @@ pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
     panic!("Heap allocation error, layout = {:?}", layout)
 }
 
-#[derive(Debug)]
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct HeapUser {
     pub virt_range: VirtAddrRange,
+    pub cur_heap_ptr: usize,
 }
 
 impl HeapUser {
     pub fn new(virt_range: VirtAddrRange) -> Self {
         assert!(
-            virt_range.start < virt_range.end,
+            virt_range.start <= virt_range.end,
             "Virtual address range start must be less than end"
         );
         assert!(
@@ -65,55 +65,73 @@ impl HeapUser {
             "Virtual address start must be 4K aligned"
         );
 
-        Self { virt_range }
+        Self {
+            virt_range,
+            cur_heap_ptr: virt_range.start.as_usize(),
+        }
     }
 
-    pub fn convert_to_memregion(&self) -> MemRegion {
-        MemRegion::new_anonymous(
-            self.virt_range.start,
-            self.virt_range.end,
-            MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE,
-            "user_heap".to_string(),
-            MemRegionType::HEAP,
-        )
+    pub fn set_heap_top(&mut self, top: usize) {
+        self.virt_range.end = VirtAddr::from_usize(top);
     }
 
-    pub fn get_end(&self) -> usize {
+    pub fn get_bottom(&self) -> usize {
+        self.virt_range.start.as_usize()
+    }
+
+    pub fn get_top(&self) -> usize {
         self.virt_range.end.as_usize()
     }
 
-    pub fn sbrk(&mut self, increment: usize,pagetable:&mut PageTable) -> usize{
-        let pages = increment.div_ceil(PAGE_SIZE.try_into().unwrap());
-        let new_end = self.virt_range.end.add(pages * PAGE_SIZE);
-        let old_end = self.virt_range.end;
-        let mut new_region = MemRegion::new_anonymous(
-            old_end,
-            new_end,
-            MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE,
-            "user_heap_sbrk".to_string(),
-            MemRegionType::HEAP,
-        );
-        pagetable.map_region_user_frame(&mut new_region);
-        self.virt_range.end = new_end;
-        new_end.as_usize()
+    pub fn add_frame(&self,pagetable: &mut PageTable)
+    {
+        let heap_top = self.get_top();
+        let start_vaddr = VirtAddr::from_usize(heap_top);
+        let end_vaddr = VirtAddr::from_usize(heap_top + PAGE_SIZE);
+        let pte_flages = MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE;
+        let mut map_region = MemRegion::new_anonymous(start_vaddr, end_vaddr, pte_flages, "user_heap_add_frame".to_string(), MemRegionType::HEAP);
+        pagetable.map_region_user_frame(&mut map_region);
     }
 
-    pub fn map(&mut self, pagetable: &mut PageTable) -> bool {
-        let vaddr_range = self.virt_range;
-        debug!("vaddr start: {:?}, vaddr end: {:?}", vaddr_range.start, vaddr_range.end);
-        let page_iter = PageIter4K::new(vaddr_range.start, vaddr_range.end).expect("Failed to create PageIter");
-        for page in page_iter {
-            if pagetable.translate(page).is_none() {
-                let mut region = MemRegion::new_anonymous(
-                    page,
-                    VirtAddr::from_usize(page.as_usize() + PAGE_SIZE),
-                    MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE,
-                    "user_heap_on_demand_map".to_string(),
-                    MemRegionType::HEAP,
-                );
-                pagetable.map_region_user_frame(&mut region);
-            }
+    pub fn get_ptr(&self) -> usize
+    {
+        self.cur_heap_ptr
+    }
+
+    pub fn set_ptr(&mut self, ptr: usize)
+    {
+        self.cur_heap_ptr = ptr;
+    }
+
+    pub fn sbrk(&mut self, increment: usize ,pagetable: &mut PageTable)
+    {
+        let pages = increment.div_ceil(PAGE_SIZE.try_into().unwrap());
+        let old_top = self.get_top();
+        let new_top = old_top + pages * PAGE_SIZE;
+        let ptr_value = old_top + increment;
+        self.set_ptr(ptr_value);
+        for _ in 0..pages
+        {
+            self.add_frame(pagetable);
         }
-        true
+        self.set_heap_top(new_top);
+    }
+
+    pub fn brk(&mut self, addr: usize,pagetable: &mut PageTable)
+    {
+        let heap_bottom = self.get_bottom();
+        let heap_top = self.get_top();
+        if addr < heap_bottom
+        {
+            panic!("brk failed");
+        }
+        if addr >= heap_bottom && addr <= heap_top
+        {
+            self.set_ptr(addr);
+        }
+        if addr > heap_top
+        {
+            self.sbrk(addr - heap_top,pagetable);
+        }
     }
 }

@@ -48,6 +48,10 @@ impl Path {
         inner.push(path.to_string());
         Path { inner }
     }
+
+    pub fn is_current(&self) -> bool {
+        self.inner.len() == 1 && self.inner[0] == "."
+    }
 }
 
 impl From<&str> for Path {

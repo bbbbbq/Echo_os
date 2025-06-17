@@ -14,33 +14,14 @@ use page_table_multiarch::MappingFlags;
 
 impl UserHandler {
     pub async fn sys_brk(&mut self, addr: usize) -> Result<usize, TaskError> {
-        // if addr != 0 {
-        //     get_boot_page_table().change_pagetable();
-        //     let mut heap = self.task.get_heap();
-        //     let old_end = heap.get_end();
-        //     debug!("sys_brk @ new: {:#x} old: {:#x}", old_end + addr, old_end);
-        let mut heap = self.task.get_heap();
-        let old_end = heap.get_end();
-
+        debug!("sys_brk @ addr: {:#x}", addr);
         if addr == 0 {
-            return Ok(old_end);
+            let res = self.task.get_heap().get_top();
+            return Ok(res);
         }
-
-        if addr > old_end {
-            let new_end = VirtAddr::from_usize(addr).align_up_4k();
-            let mut new_region = MemRegion::new_anonymous(
-                VirtAddr::from_usize(old_end).align_up_4k(),
-                new_end,
-                MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE,
-                "user_heap_sbrk".to_string(),
-                MemRegionType::HEAP,
-            );
-            self.task.page_table.lock().map_region_user_frame(&mut new_region);
-            heap.virt_range.end = new_end;
-            self.task.set_heap(heap);
-        }
-        
-        Ok(addr)
+        self.task.get_heap().brk(addr, &mut self.task.page_table.lock());
+        let res = self.task.get_heap().get_top();
+        Ok(res)
     }
 
     pub async fn sys_mmap(
