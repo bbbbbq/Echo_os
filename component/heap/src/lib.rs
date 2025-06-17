@@ -6,8 +6,10 @@ use alloc::string::ToString;
 use config::riscv64_qemu::plat::PAGE_SIZE;
 use buddy_system_allocator::LockedHeap;
 use config::target::plat::HEAP_SIZE;
+use console::println;
+use memory_addr::{PageIter4K, VirtAddr};
 use core::ptr;
-use log::info;
+use log::{debug, info};
 use mem::memregion::{MemRegion, MemRegionType};
 use mem::pagetable::PageTable;
 use memory_addr::MemoryAddr;
@@ -94,5 +96,24 @@ impl HeapUser {
         pagetable.map_region_user_frame(&mut new_region);
         self.virt_range.end = new_end;
         new_end.as_usize()
+    }
+
+    pub fn map(&mut self, pagetable: &mut PageTable) -> bool {
+        let vaddr_range = self.virt_range;
+        debug!("vaddr start: {:?}, vaddr end: {:?}", vaddr_range.start, vaddr_range.end);
+        let page_iter = PageIter4K::new(vaddr_range.start, vaddr_range.end).expect("Failed to create PageIter");
+        for page in page_iter {
+            if pagetable.translate(page).is_none() {
+                let mut region = MemRegion::new_anonymous(
+                    page,
+                    VirtAddr::from_usize(page.as_usize() + PAGE_SIZE),
+                    MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE,
+                    "user_heap_on_demand_map".to_string(),
+                    MemRegionType::HEAP,
+                );
+                pagetable.map_region_user_frame(&mut region);
+            }
+        }
+        true
     }
 }

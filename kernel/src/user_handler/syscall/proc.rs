@@ -2,6 +2,8 @@ use crate::executor::error::TaskError;
 use crate::executor::ops::yield_now;
 use crate::user_handler::handler::UserHandler;
 use log::{debug, warn};
+use struct_define::timespec::TimeSpec;
+use timer::get_time;
 use crate::executor::task::{AsyncTask, CloneFlags};
 use crate::user_handler::userbuf::UserBuf;
 use crate::executor::task::AsyncTaskItem;
@@ -186,7 +188,7 @@ impl UserHandler {
         // Convert Vec<String> to Vec<&str>
         let args_str: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
         let envp_str: Vec<&str> = envp_vec.iter().map(|s| s.as_str()).collect();
-        let id = add_user_task(&file_name, args_str, envp_str).await;
+        let id = add_user_task(&file_name, args_str, envp_str);
         self.task.thread_exit(id.0);
         Ok(id.0)
     }
@@ -215,5 +217,38 @@ impl UserHandler {
         let tid_address = tid_address.read();
         self.task.tcb.write().clear_child_tid = Some(tid_address.try_into().unwrap());
         Ok(self.tid.0)
+    }
+
+    pub async fn sys_getuid(&self) -> Result<usize, TaskError> {
+        Ok(0)
+    }
+
+    pub async fn sys_clock_gettime(
+        &self,
+        clock_id: usize,
+        times_ptr: UserBuf<TimeSpec>,
+    ) -> Result<usize, TaskError> {
+        debug!(
+            "[task {:?}] sys_clock_gettime @ clock_id: {}, times_ptr: {}",
+            self.task.get_task_id(), clock_id, times_ptr
+        );
+
+        let ns = match clock_id {
+            0 => get_time(),        // CLOCK_REALTIME
+            1 => get_time(), // CLOCK_MONOTONIC
+            2 => {
+                panic!("CLOCK_PROCESS_CPUTIME_ID not implemented");
+            }
+            3 => {
+                panic!("CLOCK_THREAD_CPUTIME_ID not implemented");
+            }
+            _ => return Err(TaskError::EINVAL),
+        };
+
+        times_ptr.write(TimeSpec {
+            sec: ns.as_secs() as usize,
+            nsec: ns.subsec_nanos() as usize,
+        });
+        Ok(0)
     }
 }

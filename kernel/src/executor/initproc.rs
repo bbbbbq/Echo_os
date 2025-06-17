@@ -23,7 +23,7 @@ async fn command(cmd: &str) {
             let mut args_extend = vec![filename];
             args_extend.extend(args.into_iter());
             info!("Final arguments: {:?}", args_extend);
-            let task_id = add_user_task(&filename, args_extend, Vec::new()).await;
+            let task_id = add_user_task(&filename, args_extend, Vec::new());
             info!("Task created with ID: {:?}", task_id);
             let task = tid2task(task_id).unwrap();
             loop {
@@ -44,7 +44,7 @@ async fn command(cmd: &str) {
 
 pub async fn initproc() {
     println!("start kernel tasks");
-    command("busybox").await;
+    command("busybox ls").await;
     // command("brk").await;
     // command("chdir").await;
     // command("clone").await;

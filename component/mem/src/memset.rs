@@ -31,6 +31,14 @@ impl MemSet {
         self.regions.push(region);
     }
 
+    pub fn get_base(&self) -> usize {
+        self.regions
+            .iter()
+            .map(|r| r.vaddr_range.start.as_usize())
+            .min()
+            .unwrap_or(0)
+    }
+
     pub fn find_free_area(&self, size: usize) -> VirtAddr {
         // a simple version
         let mut sorted_regions = self.regions.clone();

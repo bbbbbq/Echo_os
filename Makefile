@@ -10,7 +10,7 @@ QEMU := qemu-system-riscv64
 QEMU_MACHINE := virt
 QEMU_CPU := rv64
 QEMU_MEMORY := 1G
-QEMU_DRIVE := -drive file=fs.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+QEMU_DRIVE := -drive file=mount.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 
 QEMU_ARGS := -machine $(QEMU_MACHINE)\
 	-nographic \
@@ -45,7 +45,7 @@ run: kernel fs-img
 runlog: kernel fs-img
 	rm -rf qemu.log
 	@echo "\n=== 运行 QEMU 并保存日志到 qemu.log ==="
-	$(QEMU) $(QEMU_ARGS) -kernel $(KERNEL_BIN) $(QEMU_DRIVE) -D qemu.log -d int,in_asm,page,mmu,guest_errors
+	$(QEMU) $(QEMU_ARGS) -kernel $(KERNEL_BIN) $(QEMU_DRIVE) -D qemu.log -d in_asm
 
 # 运行 QEMU 并捕获详细的 CPU 异常信息
 .PHONY: rundbg
@@ -57,7 +57,7 @@ rundbg: kernel fs-img
 .PHONY: debug
 debug: kernel
 	@echo "\n=== 在 QEMU 中调试 ==="
-	$(QEMU) $(QEMU_ARGS) -kernel $(KERNEL_BIN) $(QEMU_DRIVE) -s -S
+	$(QEMU) $(QEMU_ARGS) -kernel $(KERNEL_BIN) $(QEMU_DRIVE) -gdb tcp::12345 -S
 
 # GDB 连接
 .PHONY: gdb
@@ -65,7 +65,7 @@ gdb:
 	gdb-multiarch \
 		-ex 'file $(KERNEL_ELF)' \
 		-ex 'set arch riscv:rv64' \
-		-ex 'target remote localhost:1234'
+		-ex 'target remote localhost:12345'
 
 # 使用 GDB 自动运行
 .PHONY: gdb-run
@@ -73,7 +73,7 @@ gdb-run:
 	gdb-multiarch \
 		-ex 'file $(KERNEL_ELF)' \
 		-ex 'set arch riscv:rv64' \
-		-ex 'target remote localhost:1234' \
+		-ex 'target remote localhost:12345' \
 		-ex 'continue'
 
 # 清理编译产物
@@ -106,7 +106,7 @@ gdb_tmux: tmux_kill
 	@tmux split-window -h -t echo_os_debug
 	@tmux send-keys -t echo_os_debug:0.0 "make debug" C-m
 	@sleep 1
-	@tmux send-keys -t echo_os_debug:0.1 "gdb-multiarch -ex 'file $(KERNEL_ELF)' -ex 'target remote localhost:1234' -ex 'layout split'" C-m
+	@tmux send-keys -t echo_os_debug:0.1 "gdb-multiarch -ex 'file $(KERNEL_ELF)' -ex 'target remote localhost:12345' -ex 'layout split'" C-m
 	@tmux attach -t echo_os_debug
 
 asm:

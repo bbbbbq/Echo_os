@@ -11,7 +11,7 @@ impl Path {
         let parts: Vec<String> = path
             .split('/')
             .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
+            .map(|s: &str| s.to_string())
             .collect();
         Self { inner: parts }
     }

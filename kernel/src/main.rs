@@ -1,7 +1,9 @@
 #![no_std]
 #![no_main]
+use arch::os_shut_down;
 use console::println;
 use core::panic::PanicInfo;
+use core::sync::atomic::{AtomicBool, Ordering};
 use device::init_dt;
 use filesystem::file::File;
 use filesystem::init_fs;
@@ -21,6 +23,8 @@ pub mod user_handler;
 use crate::executor::executor::{GLOBLE_EXECUTOR, info_task_queue, spawn_blank};
 use crate::executor::initproc::initproc;
 use boot::boot_page_table;
+pub mod backtrace;
+use backtrace::backtrace;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -34,7 +38,7 @@ fn panic(info: &PanicInfo) -> ! {
     } else {
         error!("[panic] Panicked: {}", info.message());
     }
-    loop{}
+    os_shut_down();
 }
 
 #[unsafe(no_mangle)]
@@ -49,7 +53,7 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     init_dt(dtb);
     init_fs();
 
-    info!("\n\n\\n\n\n\n\n");
+    info!("\n\n\n\n\n\n");
     // test_ls();
     spawn_blank(initproc());
     info_task_queue();

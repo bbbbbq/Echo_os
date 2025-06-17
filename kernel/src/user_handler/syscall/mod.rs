@@ -9,6 +9,7 @@ pub mod sysnum;
 use crate::executor::error::TaskError;
 use crate::executor::task::AsyncTask;
 use crate::user_handler::syscall::other::TimeVal;
+use crate::user_handler::syscall::sysnum::sysnum_to_string;
 use crate::user_handler::userbuf::UserBuf;
 use log::error;
 use log::info;
@@ -40,7 +41,7 @@ impl UserHandler {
                 as usize;
 
             info!(
-                "[task {:?}] syscall result: {}",
+                "[task {:?}] syscall result: {} \n\n",
                 self.task.get_task_id(),
                 result as isize
             );
@@ -51,7 +52,7 @@ impl UserHandler {
     }
 
     pub async fn syscall(&mut self, call_id: usize, _args: [usize; 6]) -> Result<usize, TaskError> {
-        info!("[syscall] id: {}, args: {:?}", call_id, _args);
+        info!(" \n\n [syscall] id: {:x} {:?} , args: {:x?} ", call_id,sysnum_to_string(call_id), _args);
         match call_id {
             sysnum::SYS_EXIT => self.sys_exit(_args[0].try_into().unwrap_or(1)).await,
             sysnum::SYS_BRK => self.sys_brk(_args[0]).await,
@@ -185,6 +186,25 @@ impl UserHandler {
                 let flags = _args[2];
                 self.sys_unlinkat(dir_fd, path, flags).await
             }
+            sysnum::SYS_FACCESSAT => {
+                let dir_fd = _args[0] as isize;
+                let path = UserBuf::new(_args[1] as *mut u8);
+                let mode = _args[2];
+                let flags = _args[3];
+                self.sys_faccessat(dir_fd, path, mode, flags).await
+            }
+            sysnum::SYS_CLOCK_GETTIME => {
+                let clock_id = _args[0];
+                let times_ptr = UserBuf::new(_args[1] as *mut TimeSpec);
+                self.sys_clock_gettime(clock_id, times_ptr).await
+            }
+            sysnum::SYS_IOCTL => {
+                let fd = _args[0].try_into().unwrap();
+                let request = _args[1].try_into().unwrap();
+                let argp = _args[2];
+                self.sys_ioctl(fd, request, argp).await
+            }
+            sysnum::SYS_GETUID => self.sys_getuid().await,
             sysnum::SYS_UNAME => self.sys_uname(UserBuf::new(_args[0] as *mut UTSname)).await,
             sysnum::SYS_SCHED_YIELD => self.sys_sched_yield().await,
             sysnum::SYS_SET_TID_ADDRESS => self.sys_set_tid_address(UserBuf::new(_args[0] as *mut u32)).await,

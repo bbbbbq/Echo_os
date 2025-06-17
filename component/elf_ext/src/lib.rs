@@ -2,24 +2,26 @@
 
 extern crate alloc;
 
-use alloc::string::ToString;
 use alloc::format;
-use config::target::plat::PAGE_SIZE;
-use filesystem::{file::{File, OpenFlags}, path::Path};
-use frame::alloc_continues;
-use log::debug;
-use mem::memregion::MemRegionType;
-use mem::{memregion::MemRegion, memset::MemSet};
-use memory_addr::{MemoryAddr, PhysAddr, VirtAddr};
-use page_table_multiarch::MappingFlags;
-use xmas_elf::ElfFile;
+use alloc::string::ToString;
+use config::riscv64_qemu::plat::USER_DYN_ADDR;
+use config::target::plat::{PAGE_SIZE, USER_STACK_INIT_SIZE, USER_STACK_TOP};
 use core::ops::Mul;
+use filesystem::{
+    file::{File, OpenFlags},
+    path::Path,
+};
+use frame::alloc_continues;
+use log::{debug, error};
+use log::info;
+use mem::{memregion::MemRegion, memset::MemSet};
+use mem::{memregion::MemRegionType, stack::StackRegion};
+use memory_addr::{MemoryAddr, PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange};
+use page_table_multiarch::MappingFlags;
 use xmas_elf::sections::SectionData;
 use xmas_elf::symbol_table::DynEntry64;
 use xmas_elf::symbol_table::Entry;
-use config::riscv64_qemu::plat::USER_DYN_ADDR;
-use log::info;
-
+use xmas_elf::{ElfFile, header};
 
 pub trait ElfExt {
     fn relocate(&self, base: usize) -> Result<usize, &str>;
@@ -40,19 +42,23 @@ impl ElfExt for ElfFile<'_> {
     }
 
     fn relocate(&self, base: usize) -> Result<usize, &str> {
-        let section = self.find_section_by_name(".rela.dyn")
+        let section = self
+            .find_section_by_name(".rela.dyn")
             .ok_or(".rela.dyn not found")?;
-        
-        let data = section.get_data(self)
-            .map_err(|_| "corrupted .rela.dyn")?;
-        
+
+        let data = section.get_data(self).map_err(|_| "corrupted .rela.dyn")?;
+
         let entries = match data {
             SectionData::Rela64(entries) => entries,
             _ => return Err("bad .rela.dyn"),
         };
-        
-        info!("Relocating ELF with {} entries at base 0x{:x}", entries.len(), base);
-        
+
+        info!(
+            "Relocating ELF with {} entries at base 0x{:x}",
+            entries.len(),
+            base
+        );
+
         let dynsym = self.dynsym()?;
         for entry in entries.iter() {
             const REL_GOT: u32 = 6;
@@ -65,12 +71,12 @@ impl ElfExt for ElfFile<'_> {
 
             let entry_type = entry.get_type();
             info!("Processing relocation entry type: {}", entry_type);
-            
+
             match entry_type {
                 REL_GOT | REL_PLT | R_RISCV_64 | R_AARCH64_GLOBAL_DATA => {
                     let sym_idx = entry.get_symbol_table_index() as usize;
                     let dynsym_entry = &dynsym[sym_idx];
-                    
+
                     if dynsym_entry.shndx() == 0 {
                         let name = dynsym_entry.get_name(self)?;
                         info!("Symbol needs resolution: {}", name);
@@ -89,7 +95,7 @@ impl ElfExt for ElfFile<'_> {
                 }
             }
         }
-        
+
         info!("Relocation completed successfully");
         Ok(base)
     }
@@ -104,11 +110,14 @@ pub struct LoadElfReturn {
     pub ph_entry_size: usize,
     pub entry_point: usize,
     pub memset: MemSet,
-    pub stack_top: usize,
-    pub stack_size: usize,
+    pub stack_region: StackRegion,
     pub heap_bottom: usize,
     pub heap_size: usize,
-    pub base:usize,
+    pub base: usize,
+    pub sbss_start:usize,
+    pub sbss_size:usize,
+    pub bss_start:usize,
+    pub bss_size:usize,
 }
 
 impl core::fmt::Debug for LoadElfReturn {
@@ -121,8 +130,6 @@ impl core::fmt::Debug for LoadElfReturn {
             .field("ph_entry_size", &self.ph_entry_size)
             .field("entry_point", &format_args!("0x{:x}", self.entry_point))
             .field("memset", &self.memset)
-            .field("stack_top", &format_args!("0x{:x}", self.stack_top))
-            .field("stack_size", &self.stack_size)
             .field("heap_start", &format_args!("0x{:x}", self.heap_bottom))
             .field("heap_size", &self.heap_size)
             .finish()
@@ -139,24 +146,22 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
     let frame_addr = alloc_continues(file_size.div_ceil(PAGE_SIZE))[0]
         .paddr
         .as_usize();
+
     debug!("Allocated frame at address: 0x{:x}", frame_addr);
 
     let buffer = unsafe { core::slice::from_raw_parts_mut(frame_addr as *mut u8, file_size) };
-    let read_size = file.read_at(0,buffer).expect("Failed to read ELF file");
+    let read_size = file.read_at(0, buffer).expect("Failed to read ELF file");
     assert_eq!(read_size, file_size);
-
     debug!(
         "Successfully loaded ELF file, size: {}, address: 0x{:x}",
         file_size, frame_addr
     );
     let elf = ElfFile::new(buffer).expect("Failed to parse ELF file");
-    let ph_addr = frame_addr + elf.header.pt2.ph_offset() as usize;
-    let _ph_count = elf.header.pt2.ph_count() as usize;
     let ph_entry_size = elf.header.pt2.ph_entry_size() as usize;
-    let _entry_point = elf.header.pt2.entry_point() as usize;
 
     // 获取要映射的内存区域
     let mut memset = MemSet::new();
+    let mut elf_region_start_vaddr = 0xffffffffffffffffusize;
     let ph_count = elf.header.pt2.ph_count();
     for i in 0..ph_count {
         let ph = elf.program_header(i).unwrap();
@@ -165,6 +170,9 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
         }
 
         let va = VirtAddr::from(ph.virtual_addr() as usize);
+        if va.as_usize() < elf_region_start_vaddr {
+            elf_region_start_vaddr = va.as_usize();
+        }
         let mem_size = ph.mem_size() as usize;
         let mut flags = MappingFlags::USER;
         if ph.flags().is_read() {
@@ -188,11 +196,10 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
             MemRegionType::RODATA
         };
 
-        let paddr_start = PhysAddr::from_usize((frame_addr as u64 + ph.offset()) as usize)
-            .align_down(PAGE_SIZE);
-        let paddr_end = PhysAddr::from(
-            paddr_start.as_usize() + (end_va.as_usize() - start_va.as_usize()),
-        );
+        let paddr_start =
+            PhysAddr::from_usize((frame_addr as u64 + ph.offset()) as usize).align_down(PAGE_SIZE);
+        let paddr_end =
+            PhysAddr::from(paddr_start.as_usize() + (end_va.as_usize() - start_va.as_usize()));
 
         let region = MemRegion::new_mapped(
             start_va,
@@ -205,28 +212,6 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
         );
         memset.push_region(region);
     }
-
-    // 添加用户栈区域
-    let stack_top = VirtAddr::from(config::target::plat::USER_STACK_TOP);
-    let stack_bottom = VirtAddr::from(
-        config::target::plat::USER_STACK_TOP - config::target::plat::USER_STACK_INIT_SIZE,
-    );
-    let stack_size = config::target::plat::USER_STACK_INIT_SIZE;
-    let stack_pages = stack_size.div_ceil(PAGE_SIZE);
-    let stack_paddr_start = alloc_continues(stack_pages)[0].paddr;
-    let stack_paddr_end = PhysAddr::from(stack_paddr_start.as_usize() + stack_size);
-
-    let stack_region = MemRegion::new_mapped(
-        stack_bottom,
-        stack_top,
-        stack_paddr_start,
-        stack_paddr_end,
-        MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE,
-        "user_stack".to_string(),
-        MemRegionType::STACK,
-    );
-    memset.push_region(stack_region);
-    debug!("Added user stack: {:?} - {:?}", stack_bottom, stack_top);
 
     // 获取程序所有段之后的内存，4K 对齐后作为堆底,预先一页大小
     let heap_bottom = elf
@@ -254,24 +239,86 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
         MemRegionType::HEAP,
     );
     memset.push_region(heap_region);
-    debug!("Added user heap: {:?} - {:?}", heap_start_addr, heap_end_addr);
+    debug!(
+        "Added user heap: {:?} - {:?}",
+        heap_start_addr, heap_end_addr
+    );
 
-    let base = elf.relocate(USER_DYN_ADDR).unwrap_or(0);
+    let map_base = memset.get_base();
+    let base = if elf.header.pt2.type_().as_type() == header::Type::Executable {
+        0
+    } else {
+        map_base
+    };
 
-    info!("debug base: {}", base);
+    info!("ELF info: map_base=0x{:x}, base=0x{:x}", map_base, base);
+    let vaddr_end = VirtAddr::from(USER_STACK_TOP);
+    let vaddr_start = VirtAddr::from_usize(vaddr_end.as_usize() - USER_STACK_INIT_SIZE);
+    let frame_traces = alloc_continues(USER_STACK_INIT_SIZE.div_ceil(PAGE_SIZE));
+    let paddr_start = frame_traces[0].paddr;
+    let paddr_end = PhysAddr::from(paddr_start.as_usize() + USER_STACK_INIT_SIZE);
+    let stack_region = StackRegion::new(
+        PhysAddrRange::new(paddr_start, paddr_end),
+        VirtAddrRange::new(vaddr_start, vaddr_end),
+    );
+
+    let mut bss_start = 0;
+    let mut bss_end = 0;
+    let mut sbss_start = 0;
+    let mut sbss_end = 0;
+    info!("elf_region_start_vaddr: 0x{:x}", elf_region_start_vaddr);
+    for section in elf.section_iter() {
+        if let Ok(name) = section.get_name(&elf) {
+            if name == ".bss" {
+                bss_start = section.address() as usize;
+                bss_end = bss_start + section.size() as usize;
+                debug!("Found .bss section: 0x{:x} - 0x{:x}", bss_start, bss_end);
+            } else if name == ".sbss" {
+                sbss_start = section.address() as usize;
+                sbss_end = sbss_start + section.size() as usize;
+                debug!("Found .sbss section: 0x{:x} - 0x{:x}", sbss_start, sbss_end);
+            }
+        }
+    }
+    let sbss_size = sbss_end - sbss_start;
+    let bss_size = bss_end - bss_start;
+
+    // // Clear .bss and .sbss sections by setting memory to zero
+    // if bss_end > bss_start {
+    //     let bss_start_paddr = frame_addr + bss_start - elf_region_start_vaddr;
+    //     let bss_size = bss_end - bss_start;
+    //     unsafe {
+    //         core::ptr::write_bytes(bss_start_paddr as *mut u8, 0, bss_size);
+    //     }
+    //     debug!("Zeroed .bss section: 0x{:x} - 0x{:x}", bss_start_paddr, bss_start_paddr + bss_size);
+    // }
+    
+    // if sbss_end > sbss_start {
+    //     let sbss_start_paddr = frame_addr + sbss_start - elf_region_start_vaddr;
+    //     let sbss_size = sbss_end - sbss_start;
+    //     unsafe {
+    //         core::ptr::write_bytes(sbss_start_paddr as *mut u8, 0, sbss_size);
+    //     }
+    //     debug!("Zeroed .sbss section: 0x{:x} - 0x{:x}", sbss_start_paddr, sbss_start_paddr + sbss_size);
+    // }
+    
+
 
     LoadElfReturn {
         frame_addr,
         file_size,
-        ph_addr,
+        ph_addr: map_base + elf.header.pt2.ph_offset() as usize,
         ph_count: ph_count.into(),
         ph_entry_size,
         entry_point: elf.header.pt2.entry_point() as usize,
         memset,
-        stack_top: stack_top.as_usize(),
-        stack_size: config::target::plat::USER_STACK_INIT_SIZE,
+        stack_region,
         heap_bottom: heap_start_addr.as_usize(),
         heap_size: config::target::plat::HEAP_SIZE,
         base,
+        sbss_start,
+        sbss_size,
+        bss_start,
+        bss_size,
     }
 }

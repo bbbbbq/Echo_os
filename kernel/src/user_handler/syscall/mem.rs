@@ -6,6 +6,7 @@ use frame::alloc_continues;
 use log::debug;
 use mem::memregion::MemRegion;
 use mem::memregion::MemRegionType;
+use memory_addr::MemoryAddr;
 use crate::executor::task::AsyncTask;
 use memory_addr::align_up;
 use memory_addr::VirtAddr;
@@ -18,18 +19,28 @@ impl UserHandler {
         //     let mut heap = self.task.get_heap();
         //     let old_end = heap.get_end();
         //     debug!("sys_brk @ new: {:#x} old: {:#x}", old_end + addr, old_end);
-        //     let new_end = heap.sbrk(addr, &mut self.task.page_table.lock());
-        //     self.task.set_heap(heap);
-        //     self.task.page_table.lock().change_pagetable();
-        //     Ok(new_end)
-        // }
-        // else {
-        //     Ok(self.task.get_heap().get_end())
-        // }
         let mut heap = self.task.get_heap();
-        heap.virt_range.end = VirtAddr::from_usize(heap.virt_range.end.as_usize() + addr);
-        self.task.set_heap(heap);
-        Ok(heap.virt_range.end.as_usize())
+        let old_end = heap.get_end();
+
+        if addr == 0 {
+            return Ok(old_end);
+        }
+
+        if addr > old_end {
+            let new_end = VirtAddr::from_usize(addr).align_up_4k();
+            let mut new_region = MemRegion::new_anonymous(
+                VirtAddr::from_usize(old_end).align_up_4k(),
+                new_end,
+                MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE,
+                "user_heap_sbrk".to_string(),
+                MemRegionType::HEAP,
+            );
+            self.task.page_table.lock().map_region_user_frame(&mut new_region);
+            heap.virt_range.end = new_end;
+            self.task.set_heap(heap);
+        }
+        
+        Ok(addr)
     }
 
     pub async fn sys_mmap(

@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use alloc::string::String;
+
 pub const SYS_GETCWD: usize = 17;
 pub const SYS_DUP: usize = 23;
 pub const SYS_DUP3: usize = 24;
@@ -78,3 +80,67 @@ pub const SYS_MSYNC: usize = 227;
 pub const SYS_WAIT4: usize = 260;
 pub const SYS_PRLIMIT64: usize = 261;
 pub const SYS_RENAMEAT2: usize = 276;
+
+
+
+pub fn sysnum_to_string(sys_num: usize) -> String {
+    match sys_num {
+        SYS_IOCTL  => "SYS_IOCTL".into(),
+        SYS_GETCWD => "SYS_GETCWD".into(),
+        SYS_GETUID => "SYS_GETUID".into(),
+        SYS_DUP => "SYS_DUP".into(),
+        SYS_DUP3 => "SYS_DUP3".into(),
+        SYS_MKDIRAT => "SYS_MKDIRAT".into(),
+        SYS_LINKAT => "SYS_LINKAT".into(),
+        SYS_UNLINKAT => "SYS_UNLINKAT".into(),
+        SYS_UMOUNT2 => "SYS_UMOUNT2".into(),
+        SYS_MOUNT => "SYS_MOUNT".into(),
+        SYS_STATFS => "SYS_STATFS".into(),
+        SYS_FSTATFS => "SYS_FSTATFS".into(),
+        SYS_TRUNCATE => "SYS_TRUNCATE".into(),
+        SYS_FTRUNCATE => "SYS_FTRUNCATE".into(),
+        SYS_FACCESSAT => "SYS_FACCESSAT".into(),
+        SYS_CHDIR => "SYS_CHDIR".into(),
+        SYS_OPENAT => "SYS_OPENAT".into(),
+        SYS_CLOSE => "SYS_CLOSE".into(),
+        SYS_PIPE2 => "SYS_PIPE2".into(),
+        SYS_GETDENTS64 => "SYS_GETDENTS64".into(),
+        SYS_LSEEK => "SYS_LSEEK".into(),
+        SYS_READ => "SYS_READ".into(),
+        SYS_WRITE => "SYS_WRITE".into(),
+        SYS_READV => "SYS_READV".into(),
+        SYS_WRITEV => "SYS_WRITEV".into(),
+        SYS_SENDFILE => "SYS_SENDFILE".into(),
+        SYS_PSELECT6 => "SYS_PSELECT6".into(),
+        SYS_PPOLL => "SYS_PPOLL".into(),
+        SYS_READLINKAT => "SYS_READLINKAT".into(),
+        SYS_FSTATAT => "SYS_FSTATAT".into(),
+        SYS_FSTAT => "SYS_FSTAT".into(),
+        SYS_UTIMENSAT => "SYS_UTIMENSAT".into(),
+        SYS_EXIT => "SYS_EXIT".into(),
+        SYS_EXIT_GROUP => "SYS_EXIT_GROUP".into(),
+        SYS_SET_TID_ADDRESS => "SYS_SET_TID_ADDRESS".into(),
+        SYS_FUTEX => "SYS_FUTEX".into(),
+        SYS_SET_ROBUST_LIST => "SYS_SET_ROBUST_LIST".into(),
+        SYS_GET_ROBUST_LIST => "SYS_GET_ROBUST_LIST".into(),
+        SYS_NANOSLEEP => "SYS_NANOSLEEP".into(),
+        SYS_GETITIMER => "SYS_GETITIMER".into(),
+        SYS_SETITIMER => "SYS_SETITIMER".into(),
+        SYS_CLOCK_GETTIME => "SYS_CLOCK_GETTIME".into(),
+        SYS_YIELD => "SYS_SCHED_YIELD".into(),
+        SYS_GETPID => "SYS_GETPID".into(),
+        SYS_GETTID => "SYS_GETTID".into(),
+        SYS_GETPPID => "SYS_GETPPID".into(),
+        SYS_BRK => "SYS_BRK".into(),
+        SYS_MUNMAP => "SYS_MUNMAP".into(),
+        SYS_CLONE => "SYS_CLONE".into(),
+        SYS_EXECVE => "SYS_EXECVE".into(),
+        SYS_MMAP => "SYS_MMAP".into(),
+        SYS_MPROTECT => "SYS_MPROTECT".into(),
+        SYS_MSYNC => "SYS_MSYNC".into(),
+        SYS_WAIT4 => "SYS_WAIT4".into(),
+        SYS_PRLIMIT64 => "SYS_PRLIMIT64".into(),
+        SYS_RENAMEAT2 => "SYS_RENAMEAT2".into(),
+        _ => "UNKNOWN".into(),
+    }
+}

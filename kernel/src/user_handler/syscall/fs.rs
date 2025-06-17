@@ -4,14 +4,14 @@ use filesystem::vfs::VfsError;
 use crate::user_handler::handler::UserHandler;
 use crate::user_handler::userbuf::UserBuf;
 use alloc::string::ToString;
-use alloc::sync::Arc;
+use alloc::sync::{self, Arc};
 use alloc::vec::Vec;
 
 use filesystem::devfs::{DevFsDirInode, DevType};
 use filesystem::file::OpenFlags;
 use filesystem::file::{File, Stat};
 use filesystem::mount::{mount_inode, umount_fs};
-use filesystem::path::Path;
+use filesystem::path::{self, Path};
 use filesystem::pipe::create_pipe;
 use filesystem::vfs::{DirEntry, FileType};
 use log::debug;
@@ -349,6 +349,29 @@ impl UserHandler {
         let target_str = target.read_string();
         let path = Path::from(target_str);
         umount_fs(path);
+        Ok(0)
+    }
+
+    pub async fn sys_faccessat(&self, dirfd: isize, pathname: UserBuf<u8>, mode: usize, flags: usize) -> Result<usize, TaskError>
+    {
+        // let cwd;
+        // if dirfd == -100
+        // {
+        //     cwd = File::open(self.task.pcb.lock().curr_dir.to_string().as_str(),OpenFlags::O_DIRECTORY | OpenFlags::O_RDWR)?;
+        // } else {
+        //     cwd = self.task.get_fd(dirfd as usize).expect("invalid dirfd");
+        // }
+        // let inode = cwd.open_relative(pathname.read_string().as_str(), OpenFlags::from_bits_truncate(mode))?;
+        Ok(0)
+    }
+
+    pub async fn sys_ioctl(
+        &self,
+        _fd: u32,          // 文件描述符
+        _cmd: u32,         // 控制命令（如 Linux 的 `TIOCGWINSZ` 获取终端大小）
+        _arg: usize,       // 可选参数（可能是用户态缓冲区地址或直接值）
+    ) -> Result<usize, TaskError>
+    {
         Ok(0)
     }
 }
