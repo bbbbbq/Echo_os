@@ -1,30 +1,43 @@
 use super::id_alloc::TaskId;
 use crate::alloc::string::ToString;
-use crate::executor::executor::get_cur_usr_task;
-use crate::executor::executor::{GLOBLE_EXECUTOR, release_task};
+use crate::executor::error::{self, TaskError};
+use crate::executor::executor::{get_cur_usr_task, release_task, spawn};
 use crate::executor::id_alloc::alloc_tid;
 use crate::executor::task::{AsyncTask, AsyncTaskItem};
+use crate::executor::{self, thread};
 use crate::user_handler::entry::user_entry;
 use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
+use async_recursion::async_recursion;
+use config::target::plat::{PAGE_SIZE, STACK_SIZE, USER_DYN_ADDR, USER_STACK_INIT_SIZE, USER_STACK_TOP};
 use core::mem::size_of;
+use core::ops::Mul;
+use core::ptr::slice_from_raw_parts_mut;
 use core::time::Duration;
-use elf_ext::{LoadElfReturn, load_elf_frame};
+use elf_ext::ElfExt;
 use filesystem::fd_table::FdTable;
-use filesystem::file::File;
+use filesystem::file::{File, OpenFlags};
 use filesystem::path::Path;
+use frame::{FRAME_ALLOCATOR, alloc_continues, alloc_frame, dealloc_continues};
 use heap::HeapUser;
-use log::info;
+use log::{debug, info};
+use mem::memregion::{MemRegion, MemRegionType};
 use mem::memset::MemSet;
 use mem::pagetable::PageTable;
-use memory_addr::{VirtAddr, VirtAddrRange};
+use mem::{PhysAddrExt, VirtAddrExt};
+use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange, align_up};
+use page_table_multiarch::MappingFlags;
 use spin::{Mutex, MutexGuard, RwLock};
+use struct_define::elf::elf;
 use trap::trapframe::TrapFrame;
 use trap::trapframe::TrapFrameArgs;
+use xmas_elf::ElfFile;
+use xmas_elf::program::{SegmentData, Type};
 
 #[derive(Debug, Clone)]
 pub struct Shm {
@@ -38,7 +51,7 @@ pub struct ProcessControlBlock {
     pub fd_table: FdTable,
     pub mem_set: MemSet,
     pub curr_dir: Arc<Path>,
-    pub heap: HeapUser,
+    pub heap: usize,
     pub entry: usize,
     pub threads: Vec<Weak<UserTask>>,
     pub children: Vec<Arc<UserTask>>,
@@ -92,10 +105,7 @@ impl UserTask {
             fd_table: FdTable::new(),
             mem_set: MemSet::new(),
             curr_dir: Arc::new(work_dir),
-            heap: HeapUser::new(VirtAddrRange::new(
-                VirtAddr::from_usize(0),
-                VirtAddr::from_usize(0),
-            )),
+            heap: 0,
             entry: 0,
             threads: vec![],
             children: vec![],
@@ -119,165 +129,6 @@ impl UserTask {
         })
     }
 
-    pub fn init_cx(load_elf_return: LoadElfReturn) -> TrapFrame {
-        let base = load_elf_return.base;
-        let entry_point = load_elf_return.entry_point;
-        let sp = load_elf_return.stack_top;
-        let mut cx = TrapFrame::new();
-        cx.set_sepc(base + entry_point);
-        cx.set_sp(sp);
-        cx
-    }
-
-    // elf or other file
-    pub async fn new_frome_file(parent: Option<Weak<UserTask>>, path: Path) -> Option<Arc<Self>> {
-        let curr_dir = if let Some(parent_weak) = &parent {
-            if let Some(parent_arc) = parent_weak.upgrade() {
-                parent_arc.pcb.lock().curr_dir.clone()
-            } else {
-                Arc::new(Path::new("/".to_owned()))
-            }
-        } else {
-            Arc::new(Path::new("/".to_owned()))
-        };
-
-        let mut load_elf_return: LoadElfReturn = load_elf_frame(path.clone());
-        if load_elf_return.entry_point == 0 {
-            // Not a valid ELF file
-            return None;
-        }
-        let cx = UserTask::init_cx(load_elf_return.clone());
-        info!("load_elf_return: {:?}", load_elf_return);
-        let mut pagetable = PageTable::new();
-        let _ = pagetable.restore();
-        for region in load_elf_return.memset.regions.iter_mut() {
-            info!("region: {:?}", region);
-            let _ = pagetable.map_region_user(region);
-            region.is_mapped = true;
-        }
-        // Initialize task based on load_elf_return information
-        let task = Arc::new(Self {
-            task_id: alloc_tid(),
-            process_id: alloc_tid(),
-            page_table: Arc::new(Mutex::new(pagetable)),
-            pcb: Arc::new(Mutex::new(ProcessControlBlock {
-                fd_table: FdTable::new(),
-                mem_set: load_elf_return.memset,
-                curr_dir,
-                heap: HeapUser::new(VirtAddrRange::new(
-                    VirtAddr::from_usize(load_elf_return.heap_bottom),
-                    VirtAddr::from_usize(load_elf_return.heap_bottom + load_elf_return.heap_size),
-                )),
-                entry: load_elf_return.entry_point,
-                threads: vec![],
-                children: vec![],
-                shms: BTreeMap::new(),
-                exit_code: None,
-                time: None,
-            })),
-            parent: RwLock::new(parent.unwrap_or_else(|| Weak::new())),
-            tcb: RwLock::new(ThreadControlBlock {
-                cx: cx,
-                thread_exit_code: None,
-                clear_child_tid: None,
-            }),
-        });
-
-        Some(task)
-    }
-
-    pub fn push_num(&self, num: usize) -> usize {
-        let mut tcb = self.tcb.write();
-
-        const ULEN: usize = size_of::<usize>();
-        let sp = tcb.cx[TrapFrameArgs::SP] - ULEN;
-
-        unsafe {
-            *VirtAddr::from(sp).as_mut_ptr_of::<usize>() = num;
-        }
-        tcb.cx[TrapFrameArgs::SP] = sp;
-        sp
-    }
-
-    pub fn push_bytes(&self, bytes: &[u8]) -> usize {
-        let mut tcb = self.tcb.write();
-
-        let sp = tcb.cx[TrapFrameArgs::SP] - bytes.len();
-        let ptr = VirtAddr::from(sp).as_mut_ptr();
-        unsafe {
-            let slice = core::slice::from_raw_parts_mut(ptr, bytes.len());
-            slice.copy_from_slice(bytes);
-        }
-        tcb.cx[TrapFrameArgs::SP] = sp;
-        sp
-    }
-
-    fn push_array(&self, tcb: &mut ThreadControlBlock, array: &[usize]) -> usize {
-        let byte_len = array.len() * size_of::<usize>();
-        let sp = tcb.cx[TrapFrameArgs::SP] - byte_len;
-        let ptr = VirtAddr::from(sp).as_mut_ptr();
-        unsafe {
-            let slice = core::slice::from_raw_parts_mut(ptr, byte_len);
-            let src_bytes = core::slice::from_raw_parts(array.as_ptr() as *const u8, byte_len);
-            slice.copy_from_slice(src_bytes);
-        }
-        tcb.cx[TrapFrameArgs::SP] = sp;
-        sp
-    }
-
-    fn push_str(&self, tcb: &mut ThreadControlBlock, s: &str) -> usize {
-        const ULEN: usize = size_of::<usize>();
-        let sp = tcb.cx[TrapFrameArgs::SP] - (s.len() + 1); // +1 for null terminator
-        let aligned_sp = sp & !(ULEN - 1);
-        let ptr = VirtAddr::from(aligned_sp).as_mut_ptr();
-        unsafe {
-            let slice = core::slice::from_raw_parts_mut(ptr, s.len() + 1);
-            slice[..s.len()].copy_from_slice(s.as_bytes());
-            slice[s.len()] = 0;
-        }
-        tcb.cx[TrapFrameArgs::SP] = aligned_sp;
-        aligned_sp
-    }
-
-    pub fn init_task_stack(&self, args: Vec<String>, envp: Vec<String>) {
-        let mut tcb = self.tcb.write();
-
-        // Push environment variables and get pointers
-        let envp_ptrs: Vec<usize> = envp
-            .iter()
-            .map(|env| self.push_str(&mut tcb, env))
-            .collect();
-
-        // Push arguments and get pointers
-        let argv_ptrs: Vec<usize> = args
-            .iter()
-            .map(|arg| self.push_str(&mut tcb, arg))
-            .collect();
-
-        // Align stack before pushing pointers
-        let sp = tcb.cx[TrapFrameArgs::SP];
-        let aligned_sp = sp & !(size_of::<usize>() - 1);
-        tcb.cx[TrapFrameArgs::SP] = aligned_sp;
-
-        // Push auxv (null terminator)
-        self.push_array(&mut tcb, &[0, 0]);
-
-        // Push envp pointers (with null terminator)
-        self.push_array(&mut tcb, &[0]);
-        self.push_array(&mut tcb, &envp_ptrs);
-
-        // Push argv pointers (with null terminator)
-        self.push_array(&mut tcb, &[0]);
-        self.push_array(&mut tcb, &argv_ptrs);
-
-        // Push argc
-        self.push_array(&mut tcb, &[args.len()]);
-
-        // Set a0 to argc and a1 to argv pointer
-        tcb.cx.x[10] = args.len();
-        tcb.cx.x[11] = tcb.cx[TrapFrameArgs::SP];
-    }
-
     pub fn force_cx_ref(&self) -> &'static mut TrapFrame {
         unsafe { &mut self.tcb.as_mut_ptr().as_mut().unwrap().cx }
     }
@@ -289,14 +140,6 @@ impl UserTask {
     pub fn get_cwd(&self) -> File {
         let path = self.pcb.lock().curr_dir.clone();
         File::open(&path.to_string(), filesystem::file::OpenFlags::O_DIRECTORY).unwrap()
-    }
-
-    pub fn get_heap(&self) -> HeapUser {
-        self.pcb.lock().heap.clone()
-    }
-
-    pub fn set_heap(&self, heap: HeapUser) {
-        self.pcb.lock().heap = heap;
     }
 
     pub fn release(&self) {
@@ -394,6 +237,42 @@ impl UserTask {
     // {
     //     add_user_task(filename, args, envp)
     // }
+
+    pub fn push_str(&self, str: &str) -> usize {
+        self.push_arr(str.as_bytes())
+    }
+
+    pub fn push_arr(&self, buffer: &[u8]) -> usize {
+        let mut tcb = self.tcb.write();
+        const ULEN: usize = size_of::<usize>();
+        let len = buffer.len();
+        let sp = tcb.cx[TrapFrameArgs::SP] - align_up(len + 1, ULEN);
+        info!("push_arr sp: {:#x}", sp);
+        VirtAddr::from(sp)
+            .slice_mut_as_len(len)
+            .copy_from_slice(buffer);
+        tcb.cx[TrapFrameArgs::SP] = sp;
+        sp
+    }
+
+    pub fn push_num(&self, num: usize) -> usize {
+        let mut tcb = self.tcb.write();
+
+        const ULEN: usize = size_of::<usize>();
+        let sp = tcb.cx[TrapFrameArgs::SP] - ULEN;
+
+        *VirtAddr::from(sp).get_mut() = num;
+        tcb.cx[TrapFrameArgs::SP] = sp;
+        sp
+    }
+
+    pub fn get_sp(&self) -> usize {
+        self.tcb.read().cx[TrapFrameArgs::SP]
+    }
+
+    pub fn alloc_map_frame(&self, vaddr: VirtAddr, flags: MappingFlags) {
+        self.page_table.lock().map(vaddr, flags);
+    }
 }
 
 impl AsyncTask for UserTask {
@@ -419,38 +298,273 @@ impl AsyncTask for UserTask {
 }
 
 pub async fn add_user_task(filename: &str, args: Vec<&str>, envp: Vec<&str>) -> TaskId {
-    info!("Adding user task: {}", filename);
-    let parent = get_cur_usr_task();
-    if let Some(p) = &parent {
-        info!("Parent task ID: {:?}", p.get_task_id());
-    } else {
-        info!("No parent user task found.");
-    }
-
-    let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-    let envp: Vec<String> = envp.iter().map(|s| s.to_string()).collect();
-
-    info!("Creating task from file: {}", filename);
-    let task = UserTask::new_frome_file(None, Path::new(filename.to_owned()))
-        .await
-        .expect("Failed to create task from file");
-
+    // let curr_task = get_cur_usr_task();
+    let task = UserTask::new(Weak::new(), "/".into());
+    task.page_table.lock().restore().unwrap();
+    task.before_run();
     info!(
-        "Initializing task stack with {} args and {} env vars",
-        args.len(),
-        envp.len()
+        "task page_table: {:?}",
+        task.page_table.lock().page_table.root_paddr()
     );
-    task.init_task_stack(args, envp);
-    if let Some(p) = &parent {
-        p.before_run();
-    }
-    let task_id = task.get_task_id();
-    info!("New task created with ID: {:?}", task_id);
-    let future = user_entry();
-    let task_tmp = AsyncTaskItem { task, future };
-    info!("Spawning task into executor");
-    GLOBLE_EXECUTOR.spawn(task_tmp);
-    info!("User task {:?} added successfully", task_id);
-    task_id
+    exec_with_process(
+        task.clone(),
+        Path::new_empty(),
+        String::from(filename),
+        args.into_iter().map(String::from).collect(),
+        envp.into_iter().map(String::from).collect(),
+    )
+    .await
+    .expect("can't add task to excutor");
+    spawn(task.clone(), user_entry());
+    task.get_task_id()
 }
 
+pub async fn exec_with_process(
+    task: Arc<UserTask>,
+    curr_dir: Path,
+    path: String,
+    args: Vec<String>,
+    envp: Vec<String>,
+) -> Result<Arc<UserTask>, TaskError> {
+    info!("exec_with_process: {}", path);
+    let path = curr_dir.join(&path);
+
+    let mut file = File::open(&path.to_string(), OpenFlags::O_RDONLY).unwrap();
+    let file_size = file.get_file_size()?;
+    let pages = file_size.div_ceil(PAGE_SIZE);
+    let frames = alloc_continues(pages);
+    let buffer = frames[0].paddr.slice_mut_as_len(file_size);
+    let risze = file.read(buffer)?;
+    assert!(risze == file_size);
+
+    let elf = ElfFile::new(&buffer).unwrap();
+    let elf_header = elf.header;
+
+    let entry_point = elf_header.pt2.entry_point() as usize;
+    info!("entry_point: {:#x}", entry_point);
+    // this assert ensures that the file is elf file.
+    assert_eq!(
+        elf_header.pt1.magic,
+        [0x7f, 0x45, 0x4c, 0x46],
+        "invalid elf!"
+    );
+
+    // WARRNING: this convert async task to user task.
+    let user_task = task.clone();
+
+    let header = elf
+        .program_iter()
+        .find(|ph| ph.get_type() == Ok(Type::Interp));
+
+    // if let Some(header) = header {
+    //     if let Ok(SegmentData::Undefined(_data)) = header.get_data(&elf) {
+    //         dealloc_continues(frames[0], pages);
+    //         let mut new_args = vec![String::from("libc.so")];
+    //         new_args.extend(args);
+    //         return Box::pin(exec_with_process(
+    //             task,
+    //             curr_dir,
+    //             new_args[0].clone(),
+    //             new_args,
+    //             envp,
+    //         ))
+    //         .await;
+    //     }
+    // }
+
+    // 获取程序所有段之后的内存，4K 对齐后作为堆底
+    let heap_bottom = elf
+        .program_iter()
+        .map(|x| (x.virtual_addr() + x.mem_size()) as usize)
+        .max()
+        .unwrap()
+        .div_ceil(PAGE_SIZE)
+        .mul(PAGE_SIZE);
+
+    let base = elf.relocate(USER_DYN_ADDR).unwrap_or(0);
+
+    init_task_stack(
+        user_task.clone(),
+        args,
+        base,
+        &path.to_string(),
+        entry_point,
+        elf_header.pt2.ph_count() as usize,
+        elf_header.pt2.ph_entry_size() as usize,
+        elf.get_ph_addr().unwrap_or(0) as usize,
+        heap_bottom,
+    );
+
+    elf.program_iter()
+        .filter(|x| x.get_type().unwrap() == xmas_elf::program::Type::Load)
+        .for_each(|ph| {
+            let mem_size = ph.mem_size() as usize;
+            let virt_addr = VirtAddr::from(base + ph.virtual_addr() as usize);
+            let virt_addr_end = virt_addr + mem_size;
+            let aligned_start = virt_addr.align_down(PAGE_SIZE);
+            let aligned_end = virt_addr_end.align_up(PAGE_SIZE);
+
+            let flages = ph.flags();
+            let mut mapflages = MappingFlags::USER | MappingFlags::READ | MappingFlags::empty();
+            if flages.is_read() {
+                mapflages = mapflages | MappingFlags::READ;
+            }
+            if flages.is_write() {
+                mapflages = mapflages | MappingFlags::WRITE;
+            }
+            if flages.is_execute() {
+                mapflages = mapflages | MappingFlags::EXECUTE;
+            }
+
+            debug!(
+                "task map {:?} -> {:?}, flags: {:?}",
+                virt_addr..virt_addr_end,
+                aligned_start..aligned_end,
+                mapflages
+            );
+
+            // This direct mapping approach assumes that the physical memory backing the ELF file
+            // is large enough for the entire memory size of the segment, including BSS sections.
+            // This might not hold true if mem_size > file_size, which could lead to issues.
+            let virt_offset = virt_addr.as_usize() - aligned_start.as_usize();
+            let paddr_start =
+                PhysAddr::from(frames[0].paddr.as_usize() + ph.offset() as usize - virt_offset);
+            let paddr_end = paddr_start + (aligned_end.as_usize() - aligned_start.as_usize());
+            let mut mem_region = MemRegion::new_mapped(
+                aligned_start,
+                aligned_end,
+                paddr_start,
+                paddr_end,
+                mapflages,
+                "elf_segment".to_owned(),
+                MemRegionType::ELF,
+            );
+            let _ = user_task.page_table.lock().map_region_user(&mut mem_region);
+        });
+    dealloc_continues(frames[0], pages);
+    Ok(user_task)
+}
+
+pub fn init_task_stack(
+    user_task: Arc<UserTask>,
+    args: Vec<String>,
+    base: usize,
+    path: &str,
+    entry_point: usize,
+    ph_count: usize,
+    ph_entry_size: usize,
+    ph_addr: usize,
+    heap_bottom: usize,
+) {
+    log::info!(
+        "[init_task_stack] args: {:?}, base: {:#x}, path: {}, entry_point: {:#x}, ph_count: {}, ph_entry_size: {}, ph_addr: {:#x}, heap_bottom: {:#x}",
+        args,
+        base,
+        path,
+        entry_point,
+        ph_count,
+        ph_entry_size,
+        ph_addr,
+        heap_bottom
+    );
+
+    let stack_start = USER_STACK_TOP - USER_STACK_INIT_SIZE;
+    let stack_end = USER_STACK_TOP;
+    let flags = MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER;
+    for addr in (stack_start..stack_end).step_by(PAGE_SIZE) {
+        user_task.alloc_map_frame(VirtAddr::from(addr), flags);
+    }
+
+    log::debug!(
+        "[task {:?}] entry: {:#x}",
+        user_task.get_task_id(),
+        base + entry_point
+    );
+    user_task.inner_map(|inner| {
+        inner.heap = heap_bottom;
+        inner.entry = base + entry_point;
+    });
+
+    let mut tcb = user_task.tcb.write();
+
+    tcb.cx = TrapFrame::new();
+    tcb.cx[TrapFrameArgs::SP] = USER_STACK_TOP; // stack top;
+    tcb.cx[TrapFrameArgs::SEPC] = base + entry_point;
+
+    drop(tcb);
+
+    // push stack
+    let envp = vec![
+        "LD_LIBRARY_PATH=/",
+        "PS1=\x1b[1m\x1b[32mByteOS\x1b[0m:\x1b[1m\x1b[34m\\w\x1b[0m\\$ \0",
+        "PATH=/:/bin:/usr/bin",
+        "UB_BINDIR=./",
+    ];
+    let envp: Vec<usize> = envp
+        .into_iter()
+        .rev()
+        .map(|x| {
+            let ptr = user_task.push_str(x);
+            ptr
+        })
+        .collect();
+
+    let args: Vec<usize> = args
+        .into_iter()
+        .rev()
+        .map(|x| {
+            let ptr = user_task.push_str(&x);
+            ptr
+        })
+        .collect();
+
+    let random_ptr = user_task.push_arr(&[0u8; 16]);
+
+    let mut auxv = BTreeMap::new();
+    auxv.insert(elf::AT_PLATFORM, user_task.push_str("riscv"));
+    auxv.insert(elf::AT_EXECFN, user_task.push_str(path));
+    auxv.insert(elf::AT_PHNUM, ph_count);
+    auxv.insert(elf::AT_PAGESZ, PAGE_SIZE);
+    auxv.insert(elf::AT_ENTRY, base + entry_point);
+    auxv.insert(elf::AT_PHENT, ph_entry_size);
+    auxv.insert(elf::AT_PHDR, base + ph_addr);
+    auxv.insert(elf::AT_GID, 0);
+    auxv.insert(elf::AT_EGID, 0);
+    auxv.insert(elf::AT_UID, 0);
+    auxv.insert(elf::AT_EUID, 0);
+    auxv.insert(elf::AT_SECURE, 0);
+    auxv.insert(elf::AT_RANDOM, random_ptr);
+
+    // auxv top
+    user_task.push_num(0);
+
+    // Push auxv
+    auxv.iter().for_each(|(key, v)| {
+        user_task.push_num(*v);
+        user_task.push_num(*key);
+    });
+
+    user_task.push_num(0);
+
+    envp.iter().for_each(|x| {
+        user_task.push_num(*x);
+    });
+
+    user_task.push_num(0);
+
+    args.iter().for_each(|x| {
+        user_task.push_num(*x);
+    });
+
+    let argc = args.len();
+    user_task.push_num(argc);
+
+    let dump_end = USER_STACK_TOP - 0x1D1;
+    let _vaddr = USER_STACK_TOP;
+
+    log::info!(
+        "Dumping stack from vaddr {:#x} down to {:#x}",
+        USER_STACK_TOP,
+        dump_end
+    );
+}

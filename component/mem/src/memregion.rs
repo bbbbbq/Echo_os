@@ -7,6 +7,7 @@ use frame::FrameTracer;
 
 #[derive(Debug,Clone, Copy)]
 pub enum MemRegionType {
+    ELF,
     Text,
     BSS,
     RODATA,

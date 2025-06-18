@@ -5,6 +5,7 @@ use alloc::boxed::Box;
 use async_recursion::async_recursion;
 use log::info;
 use log::warn;
+
 use trap::trapframe::TrapFrame;
 use log::debug;
 use crate::user_handler::handler::UserTaskControlFlow;
@@ -24,6 +25,8 @@ pub async fn user_entry() {
 impl UserHandler {
     pub async fn entry_point(&mut self, cx_ref: &mut TrapFrame) {
         loop {
+
+
             self.check_timer();
 
             let res = self.handle_syscall(cx_ref).await;

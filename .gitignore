@@ -14,6 +14,9 @@ Cargo.lock
 # Debug files
 qemu.log
 
+# test mount
+test_mount
+
 # IDE specific files
 .vscode/*
 !.vscode/settings.json

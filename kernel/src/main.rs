@@ -1,6 +1,9 @@
 #![no_std]
 #![no_main]
 use console::println;
+use mem::pagetable::PageTable;
+use memory_addr::VirtAddr;
+use page_table_multiarch::MappingFlags;
 use core::panic::PanicInfo;
 use device::init_dt;
 use filesystem::file::File;
@@ -48,7 +51,8 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     trap::trap::init();
     init_dt(dtb);
     init_fs();
-
+    // test_pagetable();
+    // loop{}
     info!("\n\n\\n\n\n\n\n");
     // test_ls();
     spawn_blank(initproc());
@@ -66,4 +70,11 @@ pub fn test_ls() {
         println!("{}", entry.filename);
     }
     // os_shut_down();
+}
+
+pub fn test_pagetable() {
+    let mut page_table = PageTable::new();
+    page_table.map(VirtAddr::from_usize(0), MappingFlags::READ | MappingFlags::WRITE);
+    let addr = page_table.translate(VirtAddr::from_usize(0)).unwrap();
+    println!("addr: {:x}", addr);
 }

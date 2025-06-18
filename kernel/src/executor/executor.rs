@@ -163,6 +163,12 @@ pub fn spawn_blank(future: impl Future<Output = ()> + Send + 'static) {
     })
 }
 
+pub fn spawn(task: Arc<dyn AsyncTask>, future: impl Future<Output = ()> + Send + 'static) {
+    GLOBLE_EXECUTOR.spawn(AsyncTaskItem {
+        future: Box::pin(future),
+        task,
+    })
+}
 
 pub fn info_task_queue() {
     for task in TASK_QUEUE.lock().iter() {

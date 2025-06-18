@@ -22,6 +22,7 @@ pub fn change_pagetable(paddr: usize) {
     unsafe {
         satp::write(satp_val);
     }
+    flush_tlb();
 }
 
 pub fn flush_tlb() {

@@ -16,6 +16,9 @@ impl Path {
         Self { inner: parts }
     }
 
+    pub fn new_empty() -> Self {
+        Self { inner: Vec::new() }
+    }
     pub fn get_inner(&self) -> Vec<String> {
         self.inner.clone()
     }

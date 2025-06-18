@@ -10,7 +10,7 @@ QEMU := qemu-system-riscv64
 QEMU_MACHINE := virt
 QEMU_CPU := rv64
 QEMU_MEMORY := 1G
-QEMU_DRIVE := -drive file=fs.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+QEMU_DRIVE := -drive file=mount.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 
 QEMU_ARGS := -machine $(QEMU_MACHINE)\
 	-nographic \
@@ -45,7 +45,7 @@ run: kernel fs-img
 runlog: kernel fs-img
 	rm -rf qemu.log
 	@echo "\n=== 运行 QEMU 并保存日志到 qemu.log ==="
-	$(QEMU) $(QEMU_ARGS) -kernel $(KERNEL_BIN) $(QEMU_DRIVE) -D qemu.log -d int,in_asm,page,mmu,guest_errors
+	$(QEMU) $(QEMU_ARGS) -kernel $(KERNEL_BIN) $(QEMU_DRIVE) -D qemu.log -d in_asm
 
 # 运行 QEMU 并捕获详细的 CPU 异常信息
 .PHONY: rundbg

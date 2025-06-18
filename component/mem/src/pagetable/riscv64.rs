@@ -1,23 +1,27 @@
 use crate::memregion::MemRegion;
+use crate::memregion::MemRegionType;
 use crate::memset::MemSet;
 use crate::pag_hal;
+use alloc::borrow::ToOwned;
 use arch::change_pagetable;
 use config::target::plat::PAGE_SIZE;
+use config::target::plat::USER_STACK_INIT_SIZE;
+use config::target::plat::USER_STACK_TOP;
 use config::target::plat::VIRT_ADDR_START;
 use console::println;
 use frame::alloc_continues;
+use frame::alloc_frame;
 use log::error;
 use log::info;
-use memory_addr::{MemoryAddr, PhysAddr, VirtAddr};
-use page_table_multiarch::{GenericPTE, MappingFlags, riscv::Sv39PageTable};
-use page_table_entry::riscv::Rv64PTE;
 use memory_addr::AddrRange;
-use alloc::borrow::ToOwned;
-use crate::memregion::MemRegionType;
+use memory_addr::{MemoryAddr, PhysAddr, VirtAddr};
+use page_table_entry::riscv::Rv64PTE;
+use page_table_multiarch::PageSize;
+use page_table_multiarch::{GenericPTE, MappingFlags, riscv::Sv39PageTable};
 // Removed duplicate import of MemRegion
+use device::get_mmio_start_end;
 use frame::get_frame_start_end;
 use log::debug;
-use device::get_mmio_start_end;
 
 unsafe extern "C" {
     fn boot_page_table() -> usize;
@@ -45,7 +49,7 @@ impl Clone for PageTable {
 impl PageTable {
     pub fn new() -> Self {
         Self {
-            page_table: Sv39PageTable::try_new().expect("Failed to create Sv39PageTable")
+            page_table: Sv39PageTable::try_new().expect("Failed to create Sv39PageTable"),
         }
     }
 
@@ -80,13 +84,19 @@ impl PageTable {
                 (*current_pte_arrary)[i] = 0;
             }
         }
-        
-        let (start_addr,end_addr) = get_frame_start_end();
+
+        let (start_addr, end_addr) = get_frame_start_end();
         debug!("start_addr: {:x}, end_addr: {:x}", start_addr, end_addr);
         let mut mem_region = MemRegion {
-            name: "elf_segment".to_owned(),
-            vaddr_range: AddrRange::new(VirtAddr::from_usize(start_addr), VirtAddr::from_usize(end_addr)),
-            paddr_range: Some(AddrRange::new(PhysAddr::from_usize(start_addr), PhysAddr::from_usize(end_addr))),
+            name: "Frame".to_owned(),
+            vaddr_range: AddrRange::new(
+                VirtAddr::from_usize(start_addr),
+                VirtAddr::from_usize(end_addr),
+            ),
+            paddr_range: Some(AddrRange::new(
+                PhysAddr::from_usize(start_addr),
+                PhysAddr::from_usize(end_addr),
+            )),
             pte_flags: MappingFlags::READ | MappingFlags::WRITE,
             region_type: MemRegionType::DATA,
             is_mapped: false,
@@ -94,18 +104,34 @@ impl PageTable {
         };
         self.map_region_user(&mut mem_region)?;
 
-        let (mmio_start,mmio_end) = get_mmio_start_end();
+        let (mmio_start, mmio_end) = get_mmio_start_end();
         debug!("mmio_start: {:x}, mmio_end: {:x}", mmio_start, mmio_end);
         let mut mem_region = MemRegion {
             name: "mmio_segment".to_owned(),
-            vaddr_range: AddrRange::new(VirtAddr::from_usize(mmio_start), VirtAddr::from_usize(mmio_end)),
-            paddr_range: Some(AddrRange::new(PhysAddr::from_usize(mmio_start), PhysAddr::from_usize(mmio_end))),
+            vaddr_range: AddrRange::new(
+                VirtAddr::from_usize(mmio_start),
+                VirtAddr::from_usize(mmio_end),
+            ),
+            paddr_range: Some(AddrRange::new(
+                PhysAddr::from_usize(mmio_start),
+                PhysAddr::from_usize(mmio_end),
+            )),
             pte_flags: MappingFlags::READ | MappingFlags::WRITE,
             region_type: MemRegionType::DATA,
             is_mapped: false,
             frames: None,
         };
         self.map_region_user(&mut mem_region)?;
+
+        // let mut stack_region = MemRegion::new_anonymous(
+        //     (USER_STACK_TOP - USER_STACK_INIT_SIZE).into(),
+        //     (USER_STACK_TOP).into(),
+        //     MappingFlags::READ | MappingFlags::WRITE,
+        //     "stack_segment".to_owned(),
+        //     MemRegionType::DATA,
+        // );
+        // self.map_region_user_frame(&mut stack_region);
+
         Ok(())
     }
 
@@ -130,7 +156,8 @@ impl PageTable {
             PhysAddr::from_usize(paddr_range[0].paddr.as_usize() + offset)
         };
 
-        let _ = self.page_table
+        let _ = self
+            .page_table
             .map_region(start_vaddr, get_paddr, size, area.pte_flags, true, true)
             .expect("Failed to map region in page table");
         area.is_mapped = true;
@@ -163,7 +190,8 @@ impl PageTable {
                 paddr_range.start.add(offset)
             };
 
-            let _ = self.page_table
+            let _ = self
+                .page_table
                 .map_region(start_vaddr, get_paddr, size, region.pte_flags, true, true)
                 .map_err(|_e| ())?;
 
@@ -182,15 +210,7 @@ impl PageTable {
 
     pub fn translate(&self, vaddr: VirtAddr) -> Option<PhysAddr> {
         match self.page_table.query(vaddr) {
-            Ok((paddr, flags, page_size)) => {
-                let is_readable_writable = flags.contains(MappingFlags::READ | MappingFlags::WRITE);
-                let is_4k_page = matches!(page_size, page_table_multiarch::PageSize::Size4K);
-                if is_readable_writable && is_4k_page {
-                    Some(paddr)
-                } else {
-                    None
-                }
-            }
+            Ok((paddr, _flags, _page_size)) => Some(paddr),
             Err(_) => None,
         }
     }
@@ -198,7 +218,8 @@ impl PageTable {
     pub fn unmap_region(&mut self, region: &mut MemRegion) {
         let start_vaddr = region.vaddr_range.start;
         let size = region.vaddr_range.size();
-        let _ = self.page_table
+        let _ = self
+            .page_table
             .unmap_region(start_vaddr, size, true)
             .expect("Failed to unmap region in page table");
         region.is_mapped = false;
@@ -245,6 +266,32 @@ impl PageTable {
 
         walk(self.page_table.root_paddr(), 0, VirtAddr::from_usize(0));
         println!("[kernel] --- End of Mapped Regions ---");
+    }
+
+    pub fn map_frame(&mut self, vaddr: VirtAddr) {
+        assert!(vaddr.align_offset_4k() == 0, "vaddr must be 4K aligned");
+        let mut mem_region = MemRegion::new_anonymous(
+            vaddr,
+            vaddr + PAGE_SIZE,
+            MappingFlags::READ | MappingFlags::WRITE,
+            "frame".to_owned(),
+            MemRegionType::DATA,
+        );
+        let _ = self.map_region_user_frame(&mut mem_region);
+    }
+
+    pub fn map(&mut self, vaddr: VirtAddr, flags: MappingFlags) {
+        debug!("pagetable root_addr {:?}", self.page_table.root_paddr());
+        assert!(vaddr.align_offset_4k() == 0, "vaddr must be 4K aligned");
+        let target = alloc_frame().unwrap();
+        debug!(
+            "pagetable map {:?} -> {:?}, flags: {:?}",
+            vaddr, target.paddr, flags
+        );
+        let _ = self
+            .page_table
+            .map(vaddr, target.paddr, PageSize::Size4K, flags);
+
     }
 }
 
