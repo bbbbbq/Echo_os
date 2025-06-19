@@ -1,12 +1,13 @@
 use crate::mount::get_mount_node;
 use crate::path::Path;
-use crate::vfs::{DirEntry, FileType, Inode, VfsError, VfsResult};
+use crate::vfs::{DirEntry, Dirent64, FileType, Inode, SeekFrom, VfsError, VfsResult};
 use alloc::{
     string::ToString,
     sync::Arc,
     vec::Vec,
 };
 use core::fmt::Debug;
+use core::mem::size_of;
 use bitflags::bitflags;
 
 bitflags! {
@@ -370,12 +371,45 @@ impl File {
         self.inner.rm_dir(name)
     }
 
-    pub fn getdents(&self, buffer:&mut Vec<DirEntry>) -> Result<usize, VfsError> {
-        self.read_dir().map(|entries| {
-            let count = entries.len();
-            buffer.extend(entries);
-            count
-        })
+    pub fn getdents(&mut self, buffer: &mut [u8]) -> Result<usize, VfsError> {
+        let buf_ptr = buffer.as_mut_ptr() as usize;
+        let len = buffer.len();
+        let mut ptr: usize = buf_ptr;
+        let mut finished = 0;
+        for (i, x) in self
+            .read_dir()?
+            .iter()
+            .enumerate()
+            .skip(self.offset)
+        {
+            let filename = &x.filename;
+            let file_bytes = filename.as_bytes();
+            let current_len = size_of::<Dirent64>() + file_bytes.len() + 1;
+            if len - (ptr - buf_ptr) < current_len {
+                break;
+            }
+
+            // let dirent = c2rust_ref(ptr as *mut Dirent);
+            let dirent: &mut Dirent64 = unsafe { (ptr as *mut Dirent64).as_mut() }.unwrap();
+
+            dirent.ino = 0;
+            dirent.off = current_len as i64;
+            dirent.reclen = current_len as u16;
+
+            dirent.ftype = 0; // 0 ftype is file
+
+            let buffer = unsafe {
+                core::slice::from_raw_parts_mut(dirent.name.as_mut_ptr(), file_bytes.len() + 1)
+            };
+            buffer[..file_bytes.len()].copy_from_slice(file_bytes);
+            buffer[file_bytes.len()] = b'\0';
+            ptr = ptr + current_len;
+            finished = i + 1;
+        }
+        let bytes_read = ptr - buf_ptr;
+        self.offset = finished;
+        self.offset += bytes_read; // 同步更新文件的偏移量
+        Ok(bytes_read)
     }
 
     pub fn new_dev(inner: Arc<dyn Inode>) -> Self {
@@ -394,6 +428,24 @@ impl File {
     pub fn remove_self(&self) -> VfsResult<()> {
         let dir = Self::open(&self.path.to_string(), OpenFlags::O_DIRECTORY)?;
         dir.remove(&self.path.get_name())
+    }
+
+    pub fn seek(&mut self, seek_from: SeekFrom) -> Result<usize, VfsError> {
+        let offset = self.offset;
+        let mut stat = Stat::default();
+        let attr = self.inner.getattr()?;
+        stat.st_size = attr.size as u64;
+        let mut new_off = match seek_from {
+            SeekFrom::SET(off) => off as isize,
+            SeekFrom::CURRENT(off) => offset as isize + off,
+            SeekFrom::END(off) => stat.st_size as isize + off,
+        };
+        if new_off < 0 {
+            new_off = 0;
+        }
+        // assert!(new_off >= 0);
+        self.offset = new_off as _;
+        Ok(new_off as _)
     }
 }
 
