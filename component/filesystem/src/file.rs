@@ -145,6 +145,17 @@ impl File {
     }
 
     pub fn open(path: &str, open_flags: OpenFlags) -> VfsResult<Self> {
+        let path = if path == "." || path == "/." {
+            "/"
+        } else {
+            path
+        };
+
+        if path.is_empty() {
+            "/"
+        } else {
+            path
+        };
         let (resolved_mount_path, mount_node) = match get_mount_node(path.into()) {
             Some((p, node)) => (p, node),
             None => return Err(VfsError::NotFound),
@@ -248,7 +259,7 @@ impl File {
                         openflags: open_flags,
                         offset: 0,
                         path: Path::from(path),
-                    })
+                    }.into())
                 } else {
                     Err(VfsError::NotFound)
                 }

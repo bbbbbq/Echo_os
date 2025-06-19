@@ -8,7 +8,7 @@ use cfg_if::cfg_if;
 cfg_if! {
     if #[cfg(target_arch = "riscv64")] {
         mod riscv64;
-        pub use riscv64::{init, set_next_timeout, get_time_ms, get_time, get_clock_freq};
+        pub use riscv64::{init, set_next_timeout, get_time_ms, get_time, get_clock_freq, current_nsec};
     } else if #[cfg(target_arch = "aarch64")] {
         // Placeholder for aarch64
         pub fn init() { warn!("Timer for aarch64 not implemented"); }

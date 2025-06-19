@@ -208,9 +208,9 @@ impl PageTable {
         arch::flush_tlb();
     }
 
-    pub fn translate(&self, vaddr: VirtAddr) -> Option<PhysAddr> {
+    pub fn translate(&self, vaddr: VirtAddr) -> Option<(PhysAddr,MappingFlags)> {
         match self.page_table.query(vaddr) {
-            Ok((paddr, _flags, _page_size)) => Some(paddr),
+            Ok((paddr, flags, _page_size)) => Some((paddr, flags)),
             Err(_) => None,
         }
     }

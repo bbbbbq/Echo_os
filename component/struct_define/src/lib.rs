@@ -5,3 +5,5 @@ pub mod timespec;
 pub mod tms;
 pub mod uname;
 pub mod elf;
+pub mod iov;
+pub mod termios;

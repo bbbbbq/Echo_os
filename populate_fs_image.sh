@@ -4,7 +4,7 @@
 set -e
 
 IMAGE_NAME="fs.img"
-IMAGE_SIZE_MB=32
+IMAGE_SIZE_MB=64
 # Use a local mount point to avoid requiring root for directory creation
 MOUNT_POINT="./mount_point"
 

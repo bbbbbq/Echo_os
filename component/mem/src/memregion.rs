@@ -5,7 +5,7 @@ use super::pagetable::PageTable;
 use alloc::vec::Vec;
 use frame::FrameTracer;
 
-#[derive(Debug,Clone, Copy)]
+#[derive(Debug,Clone, Copy,PartialEq)]
 pub enum MemRegionType {
     ELF,
     Text,

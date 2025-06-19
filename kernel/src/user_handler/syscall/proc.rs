@@ -216,4 +216,14 @@ impl UserHandler {
         self.task.tcb.write().clear_child_tid = Some(tid_address.try_into().unwrap());
         Ok(self.tid.0)
     }
+
+    pub async fn sys_exit_group(&self, exit_code: isize) -> Result<usize, TaskError> {
+        debug!("sys_exit_group @ exit_code: {}", exit_code);
+        self.task.thread_exit(exit_code as _);
+        Ok(0)
+    }
+
+    pub async fn sys_geteuid(&self) -> Result<usize, TaskError> {
+        Ok(0)
+    }
 }

@@ -13,6 +13,7 @@ Cargo.lock
 
 # Debug files
 qemu.log
+*.log
 
 # test mount
 test_mount

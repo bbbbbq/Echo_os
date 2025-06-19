@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+use arch::os_shut_down;
 use console::println;
 use mem::pagetable::PageTable;
 use memory_addr::VirtAddr;
@@ -24,6 +25,7 @@ pub mod user_handler;
 use crate::executor::executor::{GLOBLE_EXECUTOR, info_task_queue, spawn_blank};
 use crate::executor::initproc::initproc;
 use boot::boot_page_table;
+pub mod signal;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -42,7 +44,7 @@ fn panic(info: &PanicInfo) -> ! {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
-    console::init();
+   // console::init();
     unsafe {
         info!("boot_page_table: {:x}", boot_page_table());
     }
@@ -53,8 +55,8 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     init_fs();
     // test_pagetable();
     // loop{}
-    info!("\n\n\\n\n\n\n\n");
-    // test_ls();
+    info!("\n\n\n\n\n\n");
+    //test_ls();
     spawn_blank(initproc());
     info_task_queue();
     GLOBLE_EXECUTOR.run();
@@ -63,18 +65,14 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
 }
 
 pub fn test_ls() {
-    let file = File::open(&"/".to_string(), OpenFlags::O_DIRECTORY | OpenFlags::O_RDWR).unwrap();
-    let mut buffer = Vec::<DirEntry>::new();
-    file.getdents(&mut buffer).unwrap();
-    for entry in buffer {
-        println!("{}", entry.filename);
-    }
-    // os_shut_down();
+    let file = File::open(&"/.".to_string(), OpenFlags::O_DIRECTORY | OpenFlags::O_RDWR).unwrap();
+    info!("file: {:?}", file);
+    os_shut_down();
 }
 
 pub fn test_pagetable() {
     let mut page_table = PageTable::new();
     page_table.map(VirtAddr::from_usize(0), MappingFlags::READ | MappingFlags::WRITE);
     let addr = page_table.translate(VirtAddr::from_usize(0)).unwrap();
-    println!("addr: {:x}", addr);
+    println!("addr: {:x}", addr.0);
 }

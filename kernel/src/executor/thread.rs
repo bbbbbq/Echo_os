@@ -5,6 +5,9 @@ use crate::executor::executor::{get_cur_usr_task, release_task, spawn};
 use crate::executor::id_alloc::alloc_tid;
 use crate::executor::task::{AsyncTask, AsyncTaskItem};
 use crate::executor::{self, thread};
+use crate::signal::flages::SigAction;
+use crate::signal::list::{SignalList, REAL_TIME_SIGNAL_NUM};
+use crate::signal::{self, SigProcMask};
 use crate::user_handler::entry::user_entry;
 use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
@@ -13,8 +16,10 @@ use alloc::string::String;
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
+use arch::flush_tlb;
 use async_recursion::async_recursion;
 use config::target::plat::{PAGE_SIZE, STACK_SIZE, USER_DYN_ADDR, USER_STACK_INIT_SIZE, USER_STACK_TOP};
+use core::cmp::max;
 use core::mem::size_of;
 use core::ops::Mul;
 use core::ptr::slice_from_raw_parts_mut;
@@ -54,6 +59,7 @@ pub struct ProcessControlBlock {
     pub heap: usize,
     pub entry: usize,
     pub threads: Vec<Weak<UserTask>>,
+    pub sigaction: [SigAction; 65],
     pub children: Vec<Arc<UserTask>>,
     pub shms: BTreeMap<usize, Arc<Shm>>,
     pub exit_code: Option<usize>,
@@ -63,6 +69,10 @@ pub struct ProcessControlBlock {
 #[derive(Clone)]
 pub struct ThreadControlBlock {
     pub cx: TrapFrame,
+    pub sigmask: SigProcMask,
+    pub signal: SignalList,
+    pub signal_queue: [usize; REAL_TIME_SIGNAL_NUM], // a queue for real time signals
+    pub exit_signal: u8,
     pub clear_child_tid: Option<usize>,
     pub thread_exit_code: Option<usize>,
 }
@@ -112,12 +122,17 @@ impl UserTask {
             shms: BTreeMap::new(),
             exit_code: None,
             time: None,
+            sigaction: [SigAction::new(); 65],
         }));
         let parent = RwLock::new(parent);
         let tcb = RwLock::new(ThreadControlBlock {
             cx: TrapFrame::new(),
             clear_child_tid: None,
             thread_exit_code: None,
+            sigmask: SigProcMask::new(),
+            signal: SignalList::new(),
+            signal_queue: [0; REAL_TIME_SIGNAL_NUM],
+            exit_signal: 0,
         });
         Arc::new(UserTask {
             task_id,
@@ -139,7 +154,7 @@ impl UserTask {
 
     pub fn get_cwd(&self) -> File {
         let path = self.pcb.lock().curr_dir.clone();
-        File::open(&path.to_string(), filesystem::file::OpenFlags::O_DIRECTORY).unwrap()
+        File::open(&path.to_string(), filesystem::file::OpenFlags::O_DIRECTORY).unwrap().into()
     }
 
     pub fn release(&self) {
@@ -167,6 +182,10 @@ impl UserTask {
             cx: parent.cx.clone(),
             thread_exit_code: None,
             clear_child_tid: None,
+            sigmask: SigProcMask::new(),
+            signal: SignalList::new(),
+            signal_queue: [0; REAL_TIME_SIGNAL_NUM],
+            exit_signal: 0,
         });
         cur_tcb.write().cx[TrapFrameArgs::RET] = 0;
 
@@ -180,6 +199,19 @@ impl UserTask {
         });
         self.pcb.lock().threads.push(Arc::downgrade(&new_task));
         new_task
+    }
+
+    pub fn sbrk(&self, addr: usize) -> usize {
+        let curr_page = self.pcb.lock().heap.div_ceil(PAGE_SIZE);
+        let after_page = addr.div_ceil(PAGE_SIZE);
+        (curr_page..after_page).for_each(|i| {
+            self.alloc_map_frame(
+            VirtAddr::from(i * PAGE_SIZE),
+            MappingFlags::USER | MappingFlags::WRITE | MappingFlags::READ,
+        );
+        });
+        self.pcb.lock().heap = addr;
+        addr
     }
 
     pub fn process_clone(self: Arc<Self>) -> Arc<Self> {
@@ -200,6 +232,10 @@ impl UserTask {
             cx: parent_tcb.cx.clone(),
             thread_exit_code: None,
             clear_child_tid: None,
+            sigmask: SigProcMask::new(),
+            signal: SignalList::new(),
+            signal_queue: [0; REAL_TIME_SIGNAL_NUM],
+            exit_signal: 0,
         });
         new_tcb.write().cx[TrapFrameArgs::RET] = 0; // Return 0 for child process
 
@@ -228,6 +264,11 @@ impl UserTask {
     //     let new_task_arc = Arc::new(new_task);
     //     self.pcb.lock().children.push(new_task_arc.clone());
     // }
+
+    pub fn query_va(&self, va: VirtAddr) -> Option<(PhysAddr,MappingFlags)> {
+        self.page_table.lock().translate(va)
+    }
+
 
     pub fn inner_map<T>(&self, mut f: impl FnMut(&mut MutexGuard<ProcessControlBlock>) -> T) -> T {
         f(&mut self.pcb.lock())
@@ -270,8 +311,20 @@ impl UserTask {
         self.tcb.read().cx[TrapFrameArgs::SP]
     }
 
+    pub fn get_heap(&self) -> usize {
+        self.pcb.lock().heap
+    }
+
     pub fn alloc_map_frame(&self, vaddr: VirtAddr, flags: MappingFlags) {
         self.page_table.lock().map(vaddr, flags);
+    }
+
+    pub fn get_last_free_addr(&self, size: usize) -> VirtAddr {
+        static mut MMAP_BASE: usize = 0x20000000;
+        unsafe {
+            MMAP_BASE = MMAP_BASE + size;
+        }
+        unsafe { VirtAddr::from_usize(MMAP_BASE) }
     }
 }
 
@@ -423,9 +476,6 @@ pub async fn exec_with_process(
                 mapflages
             );
 
-            // This direct mapping approach assumes that the physical memory backing the ELF file
-            // is large enough for the entire memory size of the segment, including BSS sections.
-            // This might not hold true if mem_size > file_size, which could lead to issues.
             let virt_offset = virt_addr.as_usize() - aligned_start.as_usize();
             let paddr_start =
                 PhysAddr::from(frames[0].paddr.as_usize() + ph.offset() as usize - virt_offset);
@@ -441,7 +491,66 @@ pub async fn exec_with_process(
             );
             let _ = user_task.page_table.lock().map_region_user(&mut mem_region);
         });
-    dealloc_continues(frames[0], pages);
+
+    let mut sbss_range = None;
+    let mut bss_range = None;
+    let mut sdata_range = None;
+    let mut data_range = None;
+
+    for sh in elf.section_iter() {
+        if let Ok(name) = sh.get_name(&elf) {
+            let range = (sh.address(), sh.address() + sh.size());
+            match name {
+                ".sbss" => sbss_range = Some(range),
+                ".bss" => bss_range = Some(range),
+                ".sdata" => sdata_range = Some(range),
+                ".data" => data_range = Some(range),
+                _ => {}
+            }
+        }
+    }
+    
+    if let Some((sbss_start, sbss_end)) = sbss_range {
+        info!("sbss_start: {:#x}, sbss_end: {:#x}", sbss_start, sbss_end);
+    }
+    if let Some((bss_start, bss_end)) = bss_range {
+        info!("bss_start: {:#x}, bss_end: {:#x}", bss_start, bss_end);
+    }
+    if let Some((sdata_start, sdata_end)) = sdata_range {
+        info!("sdata_start: {:#x}, sdata_end: {:#x}", sdata_start, sdata_end);
+    }
+    if let Some((data_start, data_end)) = data_range {
+        info!("data_start: {:#x}, data_end: {:#x}", data_start, data_end);
+    }
+
+    // 清零 .sbss 和 .bss section
+    // Zero out the .sbss and .bss sections
+    if let Some((sbss_start, sbss_end)) = sbss_range {
+        if sbss_start < sbss_end {
+            unsafe {
+                core::slice::from_raw_parts_mut(
+                    sbss_start as *mut u8,
+                    (sbss_end - sbss_start) as usize,
+                )
+                .fill(0);
+            }
+        }
+    }
+
+    if let Some((bss_start, bss_end)) = bss_range {
+        if bss_start < bss_end {
+            unsafe {
+                core::slice::from_raw_parts_mut(
+                    bss_start as *mut u8,
+                    (bss_end - bss_start) as usize,
+                )
+                .fill(0);
+            }
+        }
+    }
+    
+    let paddr = user_task.query_va(VirtAddr::from(0x7ffffda0)).unwrap();
+    info!("test_stack_translate vaddr: {:#x}, paddr: {:#x} flages: {:?}", 0x7ffffda0, paddr.0, paddr.1);
     Ok(user_task)
 }
 
@@ -471,6 +580,7 @@ pub fn init_task_stack(
     let stack_start = USER_STACK_TOP - USER_STACK_INIT_SIZE;
     let stack_end = USER_STACK_TOP;
     let flags = MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER;
+
     for addr in (stack_start..stack_end).step_by(PAGE_SIZE) {
         user_task.alloc_map_frame(VirtAddr::from(addr), flags);
     }
@@ -567,4 +677,6 @@ pub fn init_task_stack(
         USER_STACK_TOP,
         dump_end
     );
+
+    flush_tlb();
 }

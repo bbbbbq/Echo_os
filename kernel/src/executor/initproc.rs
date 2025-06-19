@@ -1,5 +1,6 @@
 use arch::os_shut_down;
 
+use crate::executor::error;
 use crate::executor::ops::yield_now;
 use crate::executor::executor::{release_task, TASK_MAP, tid2task};
 use crate::executor::thread::add_user_task;
@@ -10,7 +11,7 @@ use console::println;
 use log::info;
 use log::debug;
 use crate::executor::task::TaskType;
-
+use log::error;
 use alloc::vec;
 
 async fn command(cmd: &str) {
@@ -36,7 +37,7 @@ async fn command(cmd: &str) {
             }
         }
         Err(_) => {
-            println!("unknown command: {}", cmd);
+            error!("unknown command: {}", cmd);
         }
     }
 }
@@ -44,8 +45,8 @@ async fn command(cmd: &str) {
 
 pub async fn initproc() {
     println!("start kernel tasks");
-    // command("busybox").await;
-    command("basic/brk").await;
+    command("busybox sh").await;
+    //command("basic/brk").await;
     // command("chdir").await;
     // command("clone").await;
     // command("close").await;

@@ -1,9 +1,10 @@
 use crate::executor::sync::Sleep;
+use crate::executor::task::AsyncTask;
 use crate::user_handler::handler::UserHandler;
 use crate::executor::error::TaskError;
 use crate::user_handler::userbuf::UserBuf;
 
-use log::debug;
+use log::{debug, error};
 use struct_define::tms::TMS;
 use core::time::Duration;
 use timer::get_time;
@@ -94,6 +95,53 @@ impl UserHandler {
 
         buf_ptr.write(uts);
 
+        Ok(0)
+    }
+
+    pub async fn sys_getuid(&self) -> Result<usize, TaskError> {
+        Ok(0)
+    }
+
+    pub async fn sys_getgid(&self) -> Result<usize, TaskError> {
+        Ok(0)
+    }
+
+    pub async fn sys_getpgid(&self) -> Result<usize, TaskError> {
+        Ok(0)
+    }
+
+    pub async fn sys_setpgid(&self, _pid: usize, _pgid: usize) -> Result<usize, TaskError> {
+        Ok(0)
+    }
+
+    pub async fn sys_clock_gettime(
+        &self,
+        clock_id: usize,
+        times_ptr: UserBuf<TimeSpec>,
+    ) -> Result<usize, TaskError> {
+        debug!(
+            "[task {:?}] sys_clock_gettime @ clock_id: {}, times_ptr: {}",
+            self.task.get_task_id(), clock_id, times_ptr
+        );
+
+        let ns = match clock_id {
+            0 => get_time(),        // CLOCK_REALTIME
+            1 => get_time(), // CLOCK_MONOTONIC
+            2 => {
+                error!("CLOCK_PROCESS_CPUTIME_ID not implemented");
+                Duration::ZERO
+            }
+            3 => {
+                error!("CLOCK_THREAD_CPUTIME_ID not implemented");
+                Duration::ZERO
+            }
+            _ => return Err(TaskError::EINVAL),
+        };
+
+        times_ptr.write(TimeSpec {
+            sec: ns.as_secs() as usize,
+            nsec: ns.subsec_nanos() as usize,
+        });
         Ok(0)
     }
 }

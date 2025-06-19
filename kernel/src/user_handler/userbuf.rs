@@ -1,4 +1,3 @@
-
 #[derive(Debug, Clone, Copy)]
 pub struct UserBuf<T> {
     pub ptr: *mut T
@@ -50,6 +49,10 @@ impl<T> UserBuf<T> {
         }
     }
 
+    pub fn get_ref(&self) -> &T {
+        unsafe { &*self.ptr }
+    }
+
     pub fn write(&self, value: T) {
         unsafe {
             self.ptr.write_volatile(value);
@@ -73,6 +76,10 @@ impl<T> UserBuf<T> {
     }
 
     pub fn slice_mut_with_len(&self, len: usize) -> &mut [T] {
-        unsafe { core::slice::from_raw_parts_mut(self.ptr, len) }
+        if self.ptr.is_null() || len == 0 {
+            unsafe { core::slice::from_raw_parts_mut(core::ptr::NonNull::dangling().as_ptr(), 0) }
+        } else {
+            unsafe { core::slice::from_raw_parts_mut(self.ptr, len) }
+        }
     }
 }
