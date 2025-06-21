@@ -24,6 +24,10 @@ impl UartDev {
 }
 
 impl Inode for UartDev {
+    fn ioctl(&self, _command: usize, _arg: usize) -> VfsResult<usize> {
+        Ok(0)
+    }
+
     fn get_type(&self) -> VfsResult<FileType> {
         Ok(self.file_type)
     }
@@ -172,4 +176,6 @@ impl Inode for UartDev {
         
         Ok(revents)
     }
+
+
 }
