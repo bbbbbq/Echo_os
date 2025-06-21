@@ -1,3 +1,5 @@
+use core::cmp;
+
 use crate::alloc::string::{String, ToString};
 use crate::executor::error::TaskError;
 use crate::executor::ops::{yield_now, sleep_for_duration, terminal_wait};
@@ -78,26 +80,16 @@ impl UserHandler {
         Ok(0)
     }
 
-    pub async fn sys_getcwd(&mut self, buf_ptr: VirtAddr, size: usize) -> Result<usize, TaskError> {
-        debug!("sys_getcwd @ buf_ptr: {:?}, size: {}", buf_ptr, size);
-        let buffer = unsafe { core::slice::from_raw_parts_mut(buf_ptr.as_mut_ptr(), size) };
-        let cwd_path = self.task.pcb.lock().curr_dir.to_string();
-        let cwd_bytes = cwd_path.as_bytes();
-
-        debug!("sys_getcwd: path={}", cwd_path);
-
-        if cwd_bytes.len() + 1 > size {
-            // Not enough space in user buffer, including null terminator.
-            debug!("sys_getcwd failed: buffer too small");
-            return Err(TaskError::EINVAL);
-        }
-
-        let copy_len = cwd_bytes.len();
-        buffer[..copy_len].copy_from_slice(cwd_bytes);
-        buffer[copy_len] = 0; // Null terminate the string.
-
-        debug!("sys_getcwd success: copied {} bytes", copy_len + 1);
-        Ok(copy_len + 1)
+    pub async fn sys_getcwd(&self, buf_ptr: UserBuf<u8>, size: usize) -> Result<usize, TaskError> {
+        debug!("sys_getcwd @ buffer_ptr{} size: {}", buf_ptr, size);
+        let buffer = buf_ptr.slice_mut_with_len(size);
+        let curr_path = self.task.pcb.lock().curr_dir.clone();
+        let path = curr_path.to_string();
+        let bytes = path.as_bytes();
+        let len = cmp::min(bytes.len(), size);
+        buffer[..len].copy_from_slice(&bytes[..len]);
+        buffer[len..].fill(0);
+        Ok(buf_ptr.into())
     }
 
     pub async fn sys_openat(
@@ -289,63 +281,12 @@ impl UserHandler {
             "[task {:?}] ioctl: fd: {}, request: {:#x}, args: {:#x} {:#x} {:#x}",
             self.tid, fd, request, arg1, arg2, arg3
         );
-
-        // 获取文件描述符对应的文件
-        let file = self.task.get_fd(fd).ok_or(TaskError::EBADF)?;
-        
-        // 根据 request 处理不同的 ioctl 请求
-        match request {
-            // 处理终端属性获取请求
-            TCGETS => {
-                if arg1 != 0 {
-                    // 创建默认的终端设置
-                    let termios = Termios::default();
-                    // 将设置写入用户提供的缓冲区
-                    let termios_buf = UserBuf::<Termios>::new(arg1 as *mut Termios);
-                    termios_buf.write(termios);
-                }
-                Ok(0)
-            }
-            // 处理终端属性设置请求
-            TCSETS | TCSETSW | TCSETSF => {
-                // 简单实现：接受请求但不实际改变设置
-                Ok(0)
-            }
-            // 获取终端窗口大小
-            TIOCGWINSZ => {
-                if arg1 != 0 {
-                    // 创建默认窗口大小（80列x24行）
-                    let winsize = Winsize {
-                        ws_row: 24,
-                        ws_col: 80,
-                        ws_xpixel: 0,
-                        ws_ypixel: 0,
-                    };
-                    // 将窗口大小写入用户提供的缓冲区
-                    let winsize_buf = UserBuf::<Winsize>::new(arg1 as *mut Winsize);
-                    winsize_buf.write(winsize);
-                }
-                Ok(0)
-            }
-            // 获取前台进程组
-            TIOCGPGRP => {
-                if arg1 != 0 {
-                    // 返回当前进程的进程组ID
-                    let pgid_buf = UserBuf::<i32>::new(arg1 as *mut i32);
-                    pgid_buf.write(self.task.process_id.0 as i32);
-                }
-                Ok(0)
-            }
-            // 设置前台进程组
-            TIOCSPGRP => {
-                // 简单实现：接受请求但不实际更改
-                Ok(0)
-            }
-            // 其他 ioctl 请求 - 对于未知请求，返回成功但不执行任何操作
-            _ => Ok(0),
-        }
+        self.task
+            .get_fd(fd)
+            .ok_or(TaskError::EBADF)?
+            .ioctl(request, arg1)
+            .map_err(|_| TaskError::ENOTTY)
     }
-
     pub async fn sys_fstatat(
         &self,
         dir_fd: isize,

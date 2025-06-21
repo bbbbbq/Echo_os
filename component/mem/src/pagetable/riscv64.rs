@@ -267,6 +267,15 @@ impl PageTable {
         walk(self.page_table.root_paddr(), 0, VirtAddr::from_usize(0));
         println!("[kernel] --- End of Mapped Regions ---");
     }
+
+    pub fn protect_region(&mut self, region: &mut MemRegion, flags: MappingFlags) {
+        let start_vaddr = region.vaddr_range.start;
+        let size = region.vaddr_range.size();
+        let _ = self
+            .page_table
+            .protect_region(start_vaddr, size, flags, true)
+            .expect("Failed to protect region in page table");
+    }
 }
 
 pub fn change_boot_pagetable() {

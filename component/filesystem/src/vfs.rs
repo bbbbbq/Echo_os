@@ -193,6 +193,10 @@ pub trait Inode: DowncastSync + Send + Sync + core::fmt::Debug {
     fn poll(&self, _event: PollEvent) -> VfsResult<PollEvent> {
         Err(VfsError::NotSupported)
     }
+
+    fn ioctl(&self, _command: usize, _arg: usize) -> VfsResult<usize> {
+        Err(VfsError::NotSupported)
+    }
 }
 
 impl_downcast!(Inode);

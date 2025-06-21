@@ -448,6 +448,11 @@ impl File {
         self.offset.store(new_off as _, Ordering::Relaxed);
         Ok(new_off as _)
     }
+
+    
+    pub fn ioctl(&self, command: usize, arg: usize) -> Result<usize, VfsError> {
+        self.inner.ioctl(command, arg)
+    }
 }
 
 #[repr(C)]

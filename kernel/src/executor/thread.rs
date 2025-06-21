@@ -109,8 +109,8 @@ impl core::fmt::Debug for UserTask {
 
 impl UserTask {
     pub fn new(parent: Weak<UserTask>, work_dir: Path) -> Arc<Self> {
-        let task_id = TaskId(0);
-        let process_id = TaskId(0);
+        let task_id = alloc_tid();
+        let process_id = task_id;
         let page_table = Arc::new(Mutex::new(PageTable::new()));
         let pcb = Arc::new(Mutex::new(ProcessControlBlock {
             fd_table: FdTable::new(),
@@ -229,50 +229,36 @@ impl UserTask {
     pub fn process_clone(self: Arc<Self>) -> Arc<Self> {
         info!("process_clone");
         info!("task mem_set {:?}", self.pcb.lock().mem_set);
-        loop {}
 
-        // let parent_tcb = self.tcb.read();
-        // let mut parent_pcb = self.pcb.lock();
-
-        // let task_id = alloc_tid();
-
-        // // Clone the PCB. This requires ProcessControlBlock to be Clone.
-        // let mut new_pcb = (*parent_pcb).clone();
-
-        // // The new process has its own thread list, containing only itself.
-        // // And it has no children yet.
-        // new_pcb.threads = vec![];
-        // new_pcb.children = vec![];
-
-        // let new_tcb = RwLock::new(ThreadControlBlock {
-        //     cx: parent_tcb.cx.clone(),
-        //     thread_exit_code: None,
-        //     clear_child_tid: None,
-        //     sigmask: SigProcMask::new(),
-        //     signal: SignalList::new(),
-        //     signal_queue: [0; REAL_TIME_SIGNAL_NUM],
-        //     exit_signal: 0,
-        // });
-        // new_tcb.write().cx[TrapFrameArgs::RET] = 0; // Return 0 for child process
-
-        // let new_task = Arc::new(Self {
-        //     // Each process has its own page table.
-        //     // A real implementation would create a new page table and copy mappings (CoW).
-        //     // For now, we create a new PageTable by cloning the inner part of the parent's.
-        //     page_table: Arc::new(Mutex::new(self.page_table.lock().clone())),
-        //     task_id,
-        //     process_id: task_id, // For a new process, process_id is same as task_id
-        //     parent: RwLock::new(Arc::downgrade(&self)), // The parent is the current task
-        //     pcb: Arc::new(Mutex::new(new_pcb)),
-        //     tcb: new_tcb,
-        // });
-
-        // // Add the new task to the parent's children list.
-        // parent_pcb.children.push(new_task.clone());
-        // // Add the main thread to its own thread list.
-        // new_task.pcb.lock().threads.push(Arc::downgrade(&new_task));
-
-        // new_task
+        let parent_task: Arc<UserTask> = self.clone();
+        let work_dir = parent_task.clone().pcb.lock().curr_dir.clone();
+        let new_task = Self::new(Arc::downgrade(&parent_task), work_dir.as_ref().clone());
+        let _ = new_task.page_table.lock().restore();
+        let mut new_tcb_writer = new_task.tcb.write();
+        // clone fd_table and clone heap
+        let mut new_pcb = new_task.pcb.lock();
+        let mut pcb = self.pcb.lock();
+        new_pcb.fd_table = pcb.fd_table.clone();
+        new_pcb.heap = pcb.heap;
+        new_tcb_writer.cx = self.tcb.read().cx.clone();
+        new_tcb_writer.cx[TrapFrameArgs::RET] = 0;
+        new_pcb.curr_dir = pcb.curr_dir.clone();
+        pcb.children.push(new_task.clone());
+        new_pcb.shms = pcb.shms.clone();
+        // 显式结束对 new_task 可变借用的生命周期，避免后续移动冲突
+        drop(new_tcb_writer);
+        let parent_mem_set = pcb.mem_set.clone();
+        drop(pcb);
+        for region in parent_mem_set.regions.iter() {
+            let mut new_region = region.clone();
+            let _ = new_task.page_table.lock().map_region_user(&mut new_region);
+            new_task.page_table.lock().protect_region(&mut new_region, MappingFlags::USER | MappingFlags::READ | MappingFlags::EXECUTE);
+            new_pcb.mem_set.push_region(new_region.clone());
+            parent_task.page_table.lock().protect_region(&mut new_region, MappingFlags::USER | MappingFlags::READ | MappingFlags::EXECUTE);
+        }
+        drop(new_pcb);
+        drop(parent_task);
+        new_task
     }
 
     // pub fn fork(&self) -> Arc<Self> {

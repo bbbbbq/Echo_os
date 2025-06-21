@@ -10,6 +10,14 @@ impl<T> core::fmt::Display for UserBuf<T> {
 }
 
 
+
+impl<T> Into<usize> for UserBuf<T> {
+    fn into(self) -> usize {
+        self.ptr as usize
+    }
+}
+
+
 unsafe impl<T> Send for UserBuf<T> {}
 unsafe impl<T> Sync for UserBuf<T> {}
 

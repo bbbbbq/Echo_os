@@ -104,7 +104,7 @@ impl UserHandler {
                 self.sys_sigprocmask(how, set, oldset).await
             }
             sysnum::SYS_GETCWD => {
-                let buf_ptr = _args[0].into();
+                let buf_ptr = UserBuf::new(_args[0] as *mut u8);
                 let size = _args[1];
                 self.sys_getcwd(buf_ptr, size).await
             }
@@ -223,6 +223,11 @@ impl UserHandler {
                 let path = UserBuf::new(_args[1] as *mut u8);
                 let flags = _args[2];
                 self.sys_unlinkat(dir_fd, path, flags).await
+            }
+            sysnum::SYS_KILL => {
+                let pid = _args[0] as usize;
+                let signum = _args[1];
+                self.sys_kill(pid, signum).await
             }
             sysnum::SYS_IOCTL => {
                 let fd = _args[0];

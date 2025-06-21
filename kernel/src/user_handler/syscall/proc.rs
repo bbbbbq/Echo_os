@@ -1,11 +1,12 @@
 use crate::executor::error::TaskError;
 use crate::executor::ops::yield_now;
+use crate::signal::flages::SignalFlags;
 use crate::user_handler::handler::UserHandler;
 use log::{debug, warn};
 use crate::executor::task::{AsyncTask, CloneFlags};
 use crate::user_handler::userbuf::UserBuf;
 use crate::executor::task::AsyncTaskItem;
-use crate::executor::executor::add_ready_task;
+use crate::executor::executor::{add_ready_task, tid2task};
 use crate::user_handler::entry::user_entry;
 use crate::executor::sync::WaitPid;
 use trap::trapframe::TrapFrameArgs;
@@ -13,7 +14,7 @@ use crate::executor::id_alloc::TaskId;
 use alloc::string::String;
 use alloc::vec::Vec;
 use filesystem::path::Path;
-use crate::executor::thread::add_user_task;
+use crate::executor::thread::{add_user_task, UserTask};
 use struct_define::rlimit::Rlimit;
 impl UserHandler {
     pub async fn sys_exit(&self, exit_code: isize) -> Result<usize, TaskError> {
@@ -310,4 +311,24 @@ impl UserHandler {
 
         Ok(0)
     }
+
+    pub async fn sys_kill(&self, pid: usize, signum: usize) -> Result<usize, TaskError> {
+        let signal = SignalFlags::from_num(signum);
+        debug!(
+            "[task {:?}] sys_kill @ pid: {}, signum: {:?}",
+            self.task.get_task_id(), pid, signal
+        );
+
+        let user_task = match tid2task(TaskId(pid)) {
+            Some(task) => task.downcast_arc::<UserTask>().map_err(|_| TaskError::ESRCH),
+            None => Err(TaskError::ESRCH),
+        }?;
+
+        user_task.tcb.write().signal.add_signal(signal.clone());
+
+        yield_now().await;
+
+        Ok(0)
+    }
+
 }
