@@ -4,6 +4,7 @@ use struct_define::iov::IoVec;
 use struct_define::poll_event::PollFd;
 use struct_define::tms::TMS;
 use struct_define::uname::UTSname;
+use struct_define::rlimit::Rlimit;
 use trap::trap::EscapeReason;
 use trap::trap::run_user_task;
 use trap::trapframe::{TrapFrame, TrapFrameArgs};
@@ -257,6 +258,31 @@ impl UserHandler {
             sysnum::SYS_UNAME => self.sys_uname(UserBuf::new(_args[0] as *mut UTSname)).await,
             sysnum::SYS_SCHED_YIELD => self.sys_sched_yield().await,
             sysnum::SYS_SET_TID_ADDRESS => self.sys_set_tid_address(UserBuf::new(_args[0] as *mut u32)).await,
+            sysnum::SYS_SET_ROBUST_LIST => {
+                let head_ptr = _args[0];
+                let len = _args[1];
+                self.sys_set_robust_list(head_ptr, len).await
+            }
+            sysnum::SYS_PRLIMIT64 => {
+                let pid = _args[0];
+                let resource = _args[1];
+                let new_limit = UserBuf::new(_args[2] as *mut Rlimit);
+                let old_limit = UserBuf::new(_args[3] as *mut Rlimit);
+                self.sys_prlimit64(pid, resource, new_limit, old_limit).await
+            }
+            sysnum::SYS_READLINKAT => {
+                let dirfd = _args[0] as isize;
+                let pathname = UserBuf::new(_args[1] as *mut u8);
+                let buf = UserBuf::new(_args[2] as *mut u8);
+                let bufsiz = _args[3];
+                self.sys_readlinkat(dirfd, pathname, buf, bufsiz).await
+            }
+            sysnum::SYS_GETRANDOM => {
+                let buf = UserBuf::new(_args[0] as *mut u8);
+                let buflen = _args[1];
+                let flags = _args[2];
+                self.sys_getrandom(buf, buflen, flags).await
+            }
             _ => {
                 info!("call_id : {}", call_id);
                 error!("Invalid syscall");

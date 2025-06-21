@@ -149,7 +149,7 @@ impl UserTask {
     }
 
     pub fn get_fd(&self, fd: usize) -> Option<File> {
-        self.pcb.lock().fd_table.get(fd).cloned()
+        self.pcb.lock().fd_table.get(fd)
     }
 
     pub fn get_cwd(&self) -> File {

@@ -1,14 +1,12 @@
 use crate::mount::get_mount_node;
 use crate::path::Path;
 use crate::vfs::{DirEntry, Dirent64, FileType, Inode, SeekFrom, VfsError, VfsResult};
-use alloc::{
-    string::ToString,
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{string::ToString, sync::Arc, vec::Vec};
+use bitflags::bitflags;
 use core::fmt::Debug;
 use core::mem::size_of;
-use bitflags::bitflags;
+use core::sync::atomic::{AtomicUsize, Ordering};
+use log::{debug, error};
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,19 +53,20 @@ impl OpenFlags {
 pub struct File {
     pub inner: Arc<dyn Inode>,
     pub openflags: OpenFlags,
-    pub offset: usize,
-    pub path: Path
+    // 通过 `Arc<AtomicUsize>` 实现偏移在克隆后的共享，保证多次 `get_fd` 调用看到相同偏移。
+    pub offset: Arc<AtomicUsize>,
+    pub path: Path,
 }
 
 impl File {
-    pub fn open_relative(&self, file_name: &str,open_flags:OpenFlags) -> VfsResult<Self> {
+    pub fn open_relative(&self, file_name: &str, open_flags: OpenFlags) -> VfsResult<Self> {
         let current_inode = self.inner.clone();
         let inode = current_inode.lookup(file_name)?;
         let new_path = self.path.join(file_name);
         Ok(Self {
             inner: inode,
             openflags: open_flags,
-            offset: 0,
+            offset: Arc::new(AtomicUsize::new(0)),
             path: new_path,
         })
     }
@@ -91,7 +90,8 @@ impl File {
         match dir_inode.lookup(file_name) {
             Ok(inode) => {
                 // File exists
-                if open_flags.contains(OpenFlags::O_CREAT) && open_flags.contains(OpenFlags::O_EXCL) {
+                if open_flags.contains(OpenFlags::O_CREAT) && open_flags.contains(OpenFlags::O_EXCL)
+                {
                     return Err(VfsError::AlreadyExists);
                 }
 
@@ -102,14 +102,17 @@ impl File {
                     return Err(VfsError::NotDirectory);
                 }
 
-                if attr.file_type == FileType::Directory && !open_flags.contains(OpenFlags::O_DIRECTORY) && open_flags.is_writable() {
+                if attr.file_type == FileType::Directory
+                    && !open_flags.contains(OpenFlags::O_DIRECTORY)
+                    && open_flags.is_writable()
+                {
                     return Err(VfsError::IsDirectory);
                 }
 
                 let file = Self {
                     inner: inode,
                     openflags: open_flags,
-                    offset: 0,
+                    offset: Arc::new(AtomicUsize::new(0)),
                     path: Path::from(path),
                 };
 
@@ -134,7 +137,7 @@ impl File {
                     Ok(Self {
                         inner: inode,
                         openflags: open_flags,
-                        offset: 0,
+                        offset: Arc::new(AtomicUsize::new(0)),
                         path: Path::from(path),
                     })
                 } else {
@@ -199,7 +202,7 @@ impl File {
             return Ok(Self {
                 inner: root_inode,
                 openflags: open_flags,
-                offset: 0,
+                offset: Arc::new(AtomicUsize::new(0)),
                 path: Path::from(path),
             });
         }
@@ -215,7 +218,8 @@ impl File {
         match dir_inode.lookup(file_name) {
             Ok(inode) => {
                 // File exists
-                if open_flags.contains(OpenFlags::O_CREAT) && open_flags.contains(OpenFlags::O_EXCL) {
+                if open_flags.contains(OpenFlags::O_CREAT) && open_flags.contains(OpenFlags::O_EXCL)
+                {
                     return Err(VfsError::AlreadyExists);
                 }
 
@@ -226,14 +230,17 @@ impl File {
                     return Err(VfsError::NotDirectory);
                 }
 
-                if attr.file_type == FileType::Directory && !open_flags.contains(OpenFlags::O_DIRECTORY) && open_flags.is_writable() {
+                if attr.file_type == FileType::Directory
+                    && !open_flags.contains(OpenFlags::O_DIRECTORY)
+                    && open_flags.is_writable()
+                {
                     return Err(VfsError::IsDirectory);
                 }
 
                 let file = Self {
                     inner: inode,
                     openflags: open_flags,
-                    offset: 0,
+                    offset: Arc::new(AtomicUsize::new(0)),
                     path: Path::from(path),
                 };
 
@@ -258,9 +265,10 @@ impl File {
                     Ok(Self {
                         inner: inode,
                         openflags: open_flags,
-                        offset: 0,
+                        offset: Arc::new(AtomicUsize::new(0)),
                         path: Path::from(path),
-                    }.into())
+                    }
+                    .into())
                 } else {
                     Err(VfsError::NotFound)
                 }
@@ -273,7 +281,7 @@ impl File {
         Self {
             inner,
             openflags,
-            offset: 0,
+            offset: Arc::new(AtomicUsize::new(0)),
             path: Path::from(""), // TODO: new function should take a path
         }
     }
@@ -289,8 +297,9 @@ impl File {
         if !self.openflags.is_readable() {
             return Err(VfsError::PermissionDenied);
         }
-        let len = self.inner.read_at(self.offset, buf)?;
-        self.offset += len;
+        let cur_off = self.offset.load(Ordering::Relaxed);
+        let len = self.inner.read_at(cur_off, buf)?;
+        self.offset.fetch_add(len, Ordering::Relaxed);
         Ok(len)
     }
 
@@ -305,8 +314,9 @@ impl File {
         if !self.openflags.is_writable() {
             return Err(VfsError::PermissionDenied);
         }
-        let len = self.inner.write_at(self.offset, buf)?;
-        self.offset += len;
+        let cur_off = self.offset.load(Ordering::Relaxed);
+        let len = self.inner.write_at(cur_off, buf)?;
+        self.offset.fetch_add(len, Ordering::Relaxed);
         Ok(len)
     }
 
@@ -340,13 +350,13 @@ impl File {
         let attr = self.inner.getattr()?;
         stat.st_size = attr.size as u64;
         stat.st_mode = match attr.file_type {
-            FileType::File => 0o100000,      // S_IFREG
-            FileType::Directory => 0o040000, // S_IFDIR
-            FileType::SymLink => 0o120000,    // S_IFLNK
-            FileType::CharDevice => 0o020000, // S_IFCHR
+            FileType::File => 0o100000,        // S_IFREG
+            FileType::Directory => 0o040000,   // S_IFDIR
+            FileType::SymLink => 0o120000,     // S_IFLNK
+            FileType::CharDevice => 0o020000,  // S_IFCHR
             FileType::BlockDevice => 0o060000, // S_IFBLK
-            FileType::Pipe => 0o010000,      // S_IFIFO
-            FileType::Socket => 0o140000,    // S_IFSOCK
+            FileType::Pipe => 0o010000,        // S_IFIFO
+            FileType::Socket => 0o140000,      // S_IFSOCK
             FileType::Unknown => 0,
         };
         stat.st_nlink = attr.nlinks as u32;
@@ -370,59 +380,50 @@ impl File {
     pub fn rmdir(&self, name: &str) -> VfsResult<()> {
         self.inner.rm_dir(name)
     }
-
     pub fn getdents(&mut self, buffer: &mut [u8]) -> Result<usize, VfsError> {
-        let buf_ptr = buffer.as_mut_ptr() as usize;
-        let len = buffer.len();
-        let mut ptr: usize = buf_ptr;
-        let mut finished = 0;
-        for (i, x) in self
-            .read_dir()?
-            .iter()
-            .enumerate()
-            .skip(self.offset)
-        {
-            let filename = &x.filename;
-            let file_bytes = filename.as_bytes();
-            let current_len = size_of::<Dirent64>() + file_bytes.len() + 1;
-            if len - (ptr - buf_ptr) < current_len {
+        let dirents = self.read_dir()?;
+
+        let mut buf_off = 0usize;
+        let mut index = self.offset.load(Ordering::Relaxed);
+        while index < dirents.len() {
+            let mut dirent64 = dirents[index].convert_to_dirent64();
+            dirent64.d_off = (index + 1) as i64;
+
+            let name_len = dirent64.d_name.len();
+            let reclen = dirent64.d_reclen as usize;
+            if buf_off + reclen > buffer.len() {
                 break;
             }
 
-            // let dirent = c2rust_ref(ptr as *mut Dirent);
-            let dirent: &mut Dirent64 = unsafe { (ptr as *mut Dirent64).as_mut() }.unwrap();
+            buffer[buf_off..buf_off + 8].copy_from_slice(&dirent64.d_ino.to_le_bytes());
+            buffer[buf_off + 8..buf_off + 16].copy_from_slice(&(dirent64.d_off as i64).to_le_bytes());
+            buffer[buf_off + 16..buf_off + 18].copy_from_slice(&dirent64.d_reclen.to_le_bytes());
+            buffer[buf_off + 18] = dirent64.d_type;
+            buffer[buf_off + 19] = 0;
 
-            dirent.ino = 0;
-            dirent.off = current_len as i64;
-            dirent.reclen = current_len as u16;
+            let name_start = buf_off + 19;
+            buffer[name_start..name_start + name_len].copy_from_slice(dirent64.d_name);
+            buffer[name_start + name_len] = 0;
 
-            dirent.ftype = 0; // 0 ftype is file
-
-            let buffer = unsafe {
-                core::slice::from_raw_parts_mut(dirent.name.as_mut_ptr(), file_bytes.len() + 1)
-            };
-            buffer[..file_bytes.len()].copy_from_slice(file_bytes);
-            buffer[file_bytes.len()] = b'\0';
-            ptr = ptr + current_len;
-            finished = i + 1;
+            buf_off += reclen;
+            index += 1;
         }
-        let bytes_read = ptr - buf_ptr;
-        self.offset = finished;
-        self.offset += bytes_read; // 同步更新文件的偏移量
-        Ok(bytes_read)
+
+        self.offset.store(index, Ordering::Relaxed);
+        Ok(buf_off)
     }
 
     pub fn new_dev(inner: Arc<dyn Inode>) -> Self {
         Self {
             inner,
             openflags: OpenFlags::new_read_write(),
-            offset: 0,
+            offset: Arc::new(AtomicUsize::new(0)),
             path: Path::from(""), // Device files do not have a path in the same way
         }
     }
 
     pub fn mount(&self, _path: &str) -> Result<usize, VfsError> {
-       unimplemented!()
+        unimplemented!()
     }
 
     pub fn remove_self(&self) -> VfsResult<()> {
@@ -431,7 +432,7 @@ impl File {
     }
 
     pub fn seek(&mut self, seek_from: SeekFrom) -> Result<usize, VfsError> {
-        let offset = self.offset;
+        let offset = self.offset.load(Ordering::Relaxed);
         let mut stat = Stat::default();
         let attr = self.inner.getattr()?;
         stat.st_size = attr.size as u64;
@@ -444,7 +445,7 @@ impl File {
             new_off = 0;
         }
         // assert!(new_off >= 0);
-        self.offset = new_off as _;
+        self.offset.store(new_off as _, Ordering::Relaxed);
         Ok(new_off as _)
     }
 }
@@ -452,23 +453,23 @@ impl File {
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Stat {
-    pub st_dev: u64,      // 文件所在设备的ID
-    pub st_ino: u64,      // 文件的inode号
-    pub st_mode: u32,     // 文件类型和权限
-    pub st_nlink: u32,    // 硬链接数
-    pub st_uid: u32,      // 所有者用户ID
-    pub st_gid: u32,      // 所有者组ID
-    pub st_rdev: u64,     // 特殊设备ID（仅设备文件有效）
-    pub st_size: u64,     // 文件大小（字节数）
-    pub st_atime_sec: u64, // 最后访问时间（秒）
+    pub st_dev: u64,        // 文件所在设备的ID
+    pub st_ino: u64,        // 文件的inode号
+    pub st_mode: u32,       // 文件类型和权限
+    pub st_nlink: u32,      // 硬链接数
+    pub st_uid: u32,        // 所有者用户ID
+    pub st_gid: u32,        // 所有者组ID
+    pub st_rdev: u64,       // 特殊设备ID（仅设备文件有效）
+    pub st_size: u64,       // 文件大小（字节数）
+    pub st_atime_sec: u64,  // 最后访问时间（秒）
     pub st_atime_nsec: u64, // 最后访问时间（纳秒）
-    pub st_mtime_sec: u64, // 最后修改时间（秒）
+    pub st_mtime_sec: u64,  // 最后修改时间（秒）
     pub st_mtime_nsec: u64, // 最后修改时间（纳秒）
-    pub st_ctime_sec: u64, // 最后状态变更时间（秒）
+    pub st_ctime_sec: u64,  // 最后状态变更时间（秒）
     pub st_ctime_nsec: u64, // 最后状态变更时间（纳秒）
-    pub st_blksize: u32,  // 文件I/O的块大小
-    pub st_blocks: u32,   // 分配的磁盘块数
-    pub st_padding: u32,  // 填充
+    pub st_blksize: u32,    // 文件I/O的块大小
+    pub st_blocks: u32,     // 分配的磁盘块数
+    pub st_padding: u32,    // 填充
 }
 
 impl Stat {

@@ -144,4 +144,42 @@ impl UserHandler {
         });
         Ok(0)
     }
+
+    pub async fn sys_set_robust_list(&self, head_ptr: usize, len: usize) -> Result<usize, TaskError> {
+        debug!("sys_set_robust_list @ head_ptr: {:#x}, len: {}", head_ptr, len);
+        
+        // The robust_list_head structure size should be 24 bytes (3 pointers * 8 bytes each)
+        const ROBUST_LIST_HEAD_SIZE: usize = 24;
+        
+        // Check if the length matches the expected size
+        if len != ROBUST_LIST_HEAD_SIZE {
+            return Err(TaskError::EINVAL);
+        }
+        
+        // For now, we just validate the parameters and return success
+        // In a full implementation, we would store the robust list head pointer
+        // in the task's PCB for use with futex operations
+        
+        Ok(0)
+    }
+
+    pub async fn sys_getrandom(
+        &self,
+        buf: UserBuf<u8>,
+        buflen: usize,
+        _flags: usize,
+    ) -> Result<usize, TaskError> {
+        use core::sync::atomic::{AtomicU64, Ordering};
+        static SEED: AtomicU64 = AtomicU64::new(0x1234_5678_9abc_def0);
+        let mut written = 0;
+        let mut buffer = buf.slice_mut_with_len(buflen);
+        for b in buffer.iter_mut() {
+            let old = SEED.load(Ordering::Relaxed);
+            let new = old.wrapping_mul(6364136223846793005).wrapping_add(1);
+            SEED.store(new, Ordering::Relaxed);
+            *b = (new & 0xFF) as u8;
+            written += 1;
+        }
+        Ok(written)
+    }
 }

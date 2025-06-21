@@ -152,85 +152,16 @@ impl UserHandler {
         Ok(0)
     }
 
-    pub async fn sys_getdents64(
-        &self,
-        fd: usize,
-        buf_ptr: UserBuf<u8>,
-        len: usize, // Max length of user-space buffer
-    ) -> Result<usize, TaskError> {
+    pub async fn sys_getdents64(&self, fd: usize, buf_ptr: UserBuf<u8>, len: usize) -> Result<usize, TaskError> {
         debug!(
-            "sys_getdents64 @ fd: {}, user_buf_ptr: {:?}, user_buf_len: {}",
-            fd, buf_ptr, len
+            "[task {:?}] sys_getdents64 @ fd: {}, buf_ptr: {}, len: {}",
+            self.tid, fd, buf_ptr, len
         );
 
-        let file = self.task.get_fd(fd).ok_or(TaskError::EBADF)?;
+        let mut file = self.task.get_fd(fd).unwrap();
 
-        let mut dir_entries: Vec<DirEntry> = Vec::new();
-        // file.getdents now populates dir_entries and returns the count of entries read.
-        // We don't strictly need the count here as we'll iterate over dir_entries.
-        let _num_entries = file.getdents(&mut dir_entries)?;
-
-        let mut user_output_bytes: Vec<u8> = Vec::with_capacity(len);
-        let mut current_total_bytes_in_user_output = 0;
-
-        for entry in dir_entries {
-            let name_bytes = entry.filename.as_bytes(); // Changed: d_name -> filename
-            let name_len = name_bytes.len();
-
-            // struct linux_dirent64 {
-            //   d_ino (u64): 8 bytes
-            //   d_off (i64): 8 bytes
-            //   d_reclen (u16): 2 bytes
-            //   d_type (u8): 1 byte
-            //   d_name[]: name_len + 1 (for null terminator)
-            // }
-            let fixed_part_size = 8 + 8 + 2 + 1; // 19 bytes
-            let d_reclen_unaligned = fixed_part_size + name_len + 1; // +1 for null terminator
-            let d_reclen_aligned = (d_reclen_unaligned + 7) & !7; // Align to 8 bytes
-
-            if current_total_bytes_in_user_output + d_reclen_aligned > len {
-                // Not enough space in user buffer for this entry
-                break;
-            }
-
-            // d_ino - Placeholder, as DirEntry doesn't store inode number directly
-            let d_ino_val: u64 = 1; // Placeholder for inode number, as DirEntry doesn't store it.
-            user_output_bytes.extend_from_slice(&d_ino_val.to_ne_bytes());
-
-            // d_off: Offset of the next dirent structure. Here, it's the offset after this one.
-            let d_off = (current_total_bytes_in_user_output + d_reclen_aligned) as i64;
-            user_output_bytes.extend_from_slice(&d_off.to_ne_bytes());
-
-            // d_reclen
-            user_output_bytes.extend_from_slice(&(d_reclen_aligned as u16).to_ne_bytes());
-
-            // d_type
-            let dt_type: u8 = match entry.file_type {
-                // Changed: d_type -> file_type
-                FileType::File => 8,      // DT_REG
-                FileType::Directory => 4, // DT_DIR
-                _ => 0,                   // DT_UNKNOWN
-            };
-            user_output_bytes.push(dt_type);
-
-            // d_name (with null terminator)
-            user_output_bytes.extend_from_slice(name_bytes);
-            user_output_bytes.push(0); // Null terminator
-
-            // Padding to d_reclen_aligned
-            let current_entry_len = fixed_part_size + name_len + 1;
-            if d_reclen_aligned > current_entry_len {
-                user_output_bytes.resize(current_total_bytes_in_user_output + d_reclen_aligned, 0);
-            }
-
-            current_total_bytes_in_user_output += d_reclen_aligned;
-        }
-
-        if !user_output_bytes.is_empty() {
-            buf_ptr.write_slice(&user_output_bytes); // Changed: Removed ? operator
-        }
-
-        Ok(current_total_bytes_in_user_output)
+        let buffer = buf_ptr.slice_mut_with_len(len);
+        Ok(file.getdents(buffer)?)
     }
 
     pub async fn sys_read(
@@ -647,5 +578,36 @@ impl UserHandler {
             
             sleep_for_duration(actual_sleep_time).await;
         }
+    }
+
+    pub async fn sys_readlinkat(
+        &self,
+        dirfd: isize,
+        pathname: UserBuf<u8>,
+        buf: UserBuf<u8>,
+        bufsiz: usize,
+    ) -> Result<usize, TaskError> {
+        debug!(
+            "sys_readlinkat @ dirfd: {}, pathname: {:?}, buf: {:?}, bufsiz: {}",
+            dirfd, pathname, buf, bufsiz
+        );
+
+        // Check if buffer size is valid
+        if bufsiz == 0 {
+            return Err(TaskError::EINVAL);
+        }
+
+        // Get the pathname string
+        let path_str = pathname.get_cstr();
+        
+        // For now, we'll implement a basic version that handles simple cases
+        // In a full implementation, we would:
+        // 1. Resolve the path relative to dirfd (or current directory if AT_FDCWD)
+        // 2. Check if the target is a symbolic link
+        // 3. Read the link target and copy it to the buffer
+        
+        // For now, return EINVAL to indicate the file is not a symbolic link
+        // This is a placeholder implementation
+        Err(TaskError::EINVAL)
     }
 }

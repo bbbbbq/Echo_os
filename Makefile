@@ -10,7 +10,7 @@ QEMU := qemu-system-riscv64
 QEMU_MACHINE := virt
 QEMU_CPU := rv64
 QEMU_MEMORY := 1G
-QEMU_DRIVE := -drive file=mount.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+QEMU_DRIVE := -drive file=fs.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 
 QEMU_ARGS := -machine $(QEMU_MACHINE)\
 	-nographic \

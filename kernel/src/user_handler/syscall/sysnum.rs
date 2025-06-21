@@ -80,3 +80,4 @@ pub const SYS_MSYNC: usize = 227;
 pub const SYS_WAIT4: usize = 260;
 pub const SYS_PRLIMIT64: usize = 261;
 pub const SYS_RENAMEAT2: usize = 276;
+pub const SYS_GETRANDOM: usize = 278;

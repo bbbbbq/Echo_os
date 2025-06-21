@@ -45,7 +45,7 @@ async fn command(cmd: &str) {
 
 pub async fn initproc() {
     println!("start kernel tasks");
-    command("busybox sh").await;
+    command("bin/ls").await;
     //command("basic/brk").await;
     // command("chdir").await;
     // command("clone").await;

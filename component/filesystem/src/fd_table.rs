@@ -36,8 +36,8 @@ impl FdTable {
         Self { table }
     }
 
-    pub fn get(&self, fd: usize) -> Option<&File> {
-        self.table.get(&fd)
+    pub fn get(&self, fd: usize) -> Option<File> {
+        self.table.get(&fd).cloned()
     }
 
     pub fn insert(&mut self, fd: usize, file: File) {

@@ -8,6 +8,38 @@ extern crate alloc;
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+
+// 添加 SeekFrom 枚举定义
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum SeekFrom {
+    SET(usize),
+    CURRENT(isize),
+    END(isize),
+}
+
+// 修改 Dirent64 结构体定义，对应 Linux 的 struct linux_dirent64
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct Dirent64<'a> {
+    pub d_ino: u64,     // 64 位 inode 编号
+    pub d_off: i64,     // 下一个条目的偏移量
+    pub d_reclen: u16,  // 当前条目的总长度
+    pub d_type: u8,     // 文件类型（DT_REG=普通文件，DT_DIR=目录等）
+    pub d_name: &'a [u8], // 文件名（以 null 结尾，动态长度）
+}
+
+impl Default for Dirent64<'_> {
+    fn default() -> Self {
+        Self {
+            d_ino: 0,
+            d_off: 0,
+            d_reclen: 0,
+            d_type: 0,
+            d_name: &[0; 0],
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum FileType {
     File,
@@ -41,8 +73,6 @@ pub enum VfsError {
     Again,
 }
 
-
-
 pub type VfsResult<T> = Result<T, VfsError>;
 
 pub struct FileAttr {
@@ -57,11 +87,59 @@ pub struct FileAttr {
     pub blk_size: u32,
     pub blocks: u32,
 }
-
+#[derive(Debug, Clone)]
 pub struct DirEntry {
     pub filename: String,
     pub len: usize,
     pub file_type: FileType,
+}
+
+impl DirEntry {
+    pub fn new(filename: String, len: usize, file_type: FileType) -> Self {
+        Self {
+            filename,
+            len,
+            file_type,
+        }
+    }
+    
+    pub fn get_filename(&self) -> &str {
+        &self.filename
+    }
+    
+    pub fn get_len(&self) -> usize {
+        self.len
+    }
+    
+    pub fn get_file_type(&self) -> FileType {
+        self.file_type
+    }
+
+    pub fn convert_to_dirent64(&'_ self) -> Dirent64<'_> {
+        let d_type = match self.file_type {
+            FileType::File => 1,
+            FileType::Directory => 2,
+            FileType::CharDevice => 3,
+            FileType::BlockDevice => 4,
+            FileType::Pipe => 5,
+            FileType::Socket => 6,
+            FileType::SymLink => 7,
+            FileType::Unknown => 0,
+        };
+
+        // 文件名字节切片（不包含结尾的 0 字节）。
+        let name_bytes = self.filename.as_bytes();
+        // +1 用于尾部的 0 字节，对齐 Linux 的 dirent64 定义
+        let reclen = (core::mem::size_of::<Dirent64>() + name_bytes.len() + 1) as u16;
+
+        Dirent64 {
+            d_ino: 1,   // TODO: 使用真实 inode 编号
+            d_off: 0,
+            d_reclen: reclen,
+            d_type,
+            d_name: name_bytes,
+        }
+    }
 }
 
 pub trait Inode: DowncastSync + Send + Sync + core::fmt::Debug {

@@ -14,6 +14,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use filesystem::path::Path;
 use crate::executor::thread::add_user_task;
+use struct_define::rlimit::Rlimit;
 impl UserHandler {
     pub async fn sys_exit(&self, exit_code: isize) -> Result<usize, TaskError> {
         debug!(
@@ -224,6 +225,89 @@ impl UserHandler {
     }
 
     pub async fn sys_geteuid(&self) -> Result<usize, TaskError> {
+        Ok(0)
+    }
+
+    pub async fn sys_prlimit64(
+        &self,
+        pid: usize,
+        resource: usize,
+        new_limit: UserBuf<Rlimit>,
+        old_limit: UserBuf<Rlimit>,
+    ) -> Result<usize, TaskError> {
+        debug!(
+            "sys_prlimit64 @ pid: {}, resource: {}, new_limit: {:?}, old_limit: {:?}",
+            pid, resource, new_limit, old_limit
+        );
+
+        // Resource limit constants (from Linux)
+        const RLIMIT_CPU: usize = 0;
+        const RLIMIT_FSIZE: usize = 1;
+        const RLIMIT_DATA: usize = 2;
+        const RLIMIT_STACK: usize = 3;
+        const RLIMIT_CORE: usize = 4;
+        const RLIMIT_RSS: usize = 5;
+        const RLIMIT_NPROC: usize = 6;
+        const RLIMIT_NOFILE: usize = 7;
+        const RLIMIT_MEMLOCK: usize = 8;
+        const RLIMIT_AS: usize = 9;
+        const RLIMIT_LOCKS: usize = 10;
+        const RLIMIT_SIGPENDING: usize = 11;
+        const RLIMIT_MSGQUEUE: usize = 12;
+        const RLIMIT_NICE: usize = 13;
+        const RLIMIT_RTPRIO: usize = 14;
+        const RLIMIT_RTTIME: usize = 15;
+
+        // Check if resource is valid
+        if resource > RLIMIT_RTTIME {
+            return Err(TaskError::EINVAL);
+        }
+
+        // For now, we only support getting/setting limits for the current process (pid = 0)
+        if pid != 0 {
+            return Err(TaskError::EINVAL);
+        }
+
+        // Default limits (simplified implementation)
+        let default_limits = match resource {
+            RLIMIT_CPU => Rlimit { curr: usize::MAX, max: usize::MAX },
+            RLIMIT_FSIZE => Rlimit { curr: usize::MAX, max: usize::MAX },
+            RLIMIT_DATA => Rlimit { curr: usize::MAX, max: usize::MAX },
+            RLIMIT_STACK => Rlimit { curr: 8 * 1024 * 1024, max: usize::MAX }, // 8MB stack
+            RLIMIT_CORE => Rlimit { curr: 0, max: usize::MAX },
+            RLIMIT_RSS => Rlimit { curr: usize::MAX, max: usize::MAX },
+            RLIMIT_NPROC => Rlimit { curr: 1024, max: 1024 },
+            RLIMIT_NOFILE => Rlimit { curr: 1024, max: 1024 },
+            RLIMIT_MEMLOCK => Rlimit { curr: usize::MAX, max: usize::MAX },
+            RLIMIT_AS => Rlimit { curr: usize::MAX, max: usize::MAX },
+            RLIMIT_LOCKS => Rlimit { curr: usize::MAX, max: usize::MAX },
+            RLIMIT_SIGPENDING => Rlimit { curr: 1024, max: 1024 },
+            RLIMIT_MSGQUEUE => Rlimit { curr: 819200, max: 819200 },
+            RLIMIT_NICE => Rlimit { curr: 0, max: 0 },
+            RLIMIT_RTPRIO => Rlimit { curr: 0, max: 0 },
+            RLIMIT_RTTIME => Rlimit { curr: usize::MAX, max: usize::MAX },
+            _ => return Err(TaskError::EINVAL),
+        };
+
+        // If old_limit is valid, write current limits
+        if old_limit.is_valid() {
+            old_limit.write(default_limits);
+        }
+
+        // If new_limit is valid, we would set the limits here
+        // For now, we just validate the input but don't actually change limits
+        if new_limit.is_valid() {
+            let new_limits = new_limit.read();
+            
+            // Basic validation: current limit should not exceed maximum limit
+            if new_limits.curr > new_limits.max {
+                return Err(TaskError::EINVAL);
+            }
+            
+            // TODO: Actually implement limit setting and enforcement
+            // This would require storing limits in the task's PCB
+        }
+
         Ok(0)
     }
 }
