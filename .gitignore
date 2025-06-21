@@ -25,5 +25,7 @@ test_mount
 *.swp
 *.swo
 .cargo
+*.log
+test_tmp
 
 mount_point

@@ -6,7 +6,7 @@ use crate::executor::id_alloc::alloc_tid;
 use crate::executor::task::{AsyncTask, AsyncTaskItem};
 use crate::executor::{self, thread};
 use crate::signal::flages::SigAction;
-use crate::signal::list::{SignalList, REAL_TIME_SIGNAL_NUM};
+use crate::signal::list::{REAL_TIME_SIGNAL_NUM, SignalList};
 use crate::signal::{self, SigProcMask};
 use crate::user_handler::entry::user_entry;
 use alloc::borrow::ToOwned;
@@ -18,7 +18,9 @@ use alloc::vec;
 use alloc::vec::Vec;
 use arch::flush_tlb;
 use async_recursion::async_recursion;
-use config::target::plat::{PAGE_SIZE, STACK_SIZE, USER_DYN_ADDR, USER_STACK_INIT_SIZE, USER_STACK_TOP};
+use config::target::plat::{
+    PAGE_SIZE, STACK_SIZE, USER_DYN_ADDR, USER_STACK_INIT_SIZE, USER_STACK_TOP,
+};
 use core::cmp::max;
 use core::mem::size_of;
 use core::ops::Mul;
@@ -29,14 +31,13 @@ use filesystem::fd_table::FdTable;
 use filesystem::file::{File, OpenFlags};
 use filesystem::path::Path;
 use frame::{FRAME_ALLOCATOR, alloc_continues, alloc_frame, dealloc_continues};
-use heap::HeapUser;
 use log::{debug, info};
 use mem::memregion::{MemRegion, MemRegionType};
 use mem::memset::MemSet;
 use mem::pagetable::PageTable;
 use mem::{PhysAddrExt, VirtAddrExt};
 use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange, align_up};
-use page_table_multiarch::MappingFlags;
+use page_table_multiarch::{MappingFlags, PageSize};
 use spin::{Mutex, MutexGuard, RwLock};
 use struct_define::elf::elf;
 use trap::trapframe::TrapFrame;
@@ -154,7 +155,9 @@ impl UserTask {
 
     pub fn get_cwd(&self) -> File {
         let path = self.pcb.lock().curr_dir.clone();
-        File::open(&path.to_string(), filesystem::file::OpenFlags::O_DIRECTORY).unwrap().into()
+        File::open(&path.to_string(), filesystem::file::OpenFlags::O_DIRECTORY)
+            .unwrap()
+            .into()
     }
 
     pub fn release(&self) {
@@ -204,59 +207,72 @@ impl UserTask {
     pub fn sbrk(&self, addr: usize) -> usize {
         let curr_page = self.pcb.lock().heap.div_ceil(PAGE_SIZE);
         let after_page = addr.div_ceil(PAGE_SIZE);
-        (curr_page..after_page).for_each(|i| {
-            self.alloc_map_frame(
-            VirtAddr::from(i * PAGE_SIZE),
+        let frames = alloc_continues(after_page - curr_page);
+        let start_paddr = PhysAddr::from(frames[0].paddr.as_usize());
+        let size = (after_page - curr_page) * PAGE_SIZE;
+        let end_paddr = start_paddr + size;
+        let mut mem_region = MemRegion::new_mapped(
+            VirtAddr::from(curr_page * PAGE_SIZE),
+            VirtAddr::from(after_page * PAGE_SIZE),
+            start_paddr,
+            end_paddr,
             MappingFlags::USER | MappingFlags::WRITE | MappingFlags::READ,
+            "heap_segment".to_string(),
+            MemRegionType::HEAP,
         );
-        });
+        self.pcb.lock().mem_set.push_region(mem_region.clone());
+        let _ = self.page_table.lock().map_region_user(&mut mem_region);
         self.pcb.lock().heap = addr;
         addr
     }
 
     pub fn process_clone(self: Arc<Self>) -> Arc<Self> {
-        let parent_tcb = self.tcb.read();
-        let mut parent_pcb = self.pcb.lock();
+        info!("process_clone");
+        info!("task mem_set {:?}", self.pcb.lock().mem_set);
+        loop {}
 
-        let task_id = alloc_tid();
+        // let parent_tcb = self.tcb.read();
+        // let mut parent_pcb = self.pcb.lock();
 
-        // Clone the PCB. This requires ProcessControlBlock to be Clone.
-        let mut new_pcb = (*parent_pcb).clone();
+        // let task_id = alloc_tid();
 
-        // The new process has its own thread list, containing only itself.
-        // And it has no children yet.
-        new_pcb.threads = vec![];
-        new_pcb.children = vec![];
+        // // Clone the PCB. This requires ProcessControlBlock to be Clone.
+        // let mut new_pcb = (*parent_pcb).clone();
 
-        let new_tcb = RwLock::new(ThreadControlBlock {
-            cx: parent_tcb.cx.clone(),
-            thread_exit_code: None,
-            clear_child_tid: None,
-            sigmask: SigProcMask::new(),
-            signal: SignalList::new(),
-            signal_queue: [0; REAL_TIME_SIGNAL_NUM],
-            exit_signal: 0,
-        });
-        new_tcb.write().cx[TrapFrameArgs::RET] = 0; // Return 0 for child process
+        // // The new process has its own thread list, containing only itself.
+        // // And it has no children yet.
+        // new_pcb.threads = vec![];
+        // new_pcb.children = vec![];
 
-        let new_task = Arc::new(Self {
-            // Each process has its own page table.
-            // A real implementation would create a new page table and copy mappings (CoW).
-            // For now, we create a new PageTable by cloning the inner part of the parent's.
-            page_table: Arc::new(Mutex::new(self.page_table.lock().clone())),
-            task_id,
-            process_id: task_id, // For a new process, process_id is same as task_id
-            parent: RwLock::new(Arc::downgrade(&self)), // The parent is the current task
-            pcb: Arc::new(Mutex::new(new_pcb)),
-            tcb: new_tcb,
-        });
+        // let new_tcb = RwLock::new(ThreadControlBlock {
+        //     cx: parent_tcb.cx.clone(),
+        //     thread_exit_code: None,
+        //     clear_child_tid: None,
+        //     sigmask: SigProcMask::new(),
+        //     signal: SignalList::new(),
+        //     signal_queue: [0; REAL_TIME_SIGNAL_NUM],
+        //     exit_signal: 0,
+        // });
+        // new_tcb.write().cx[TrapFrameArgs::RET] = 0; // Return 0 for child process
 
-        // Add the new task to the parent's children list.
-        parent_pcb.children.push(new_task.clone());
-        // Add the main thread to its own thread list.
-        new_task.pcb.lock().threads.push(Arc::downgrade(&new_task));
+        // let new_task = Arc::new(Self {
+        //     // Each process has its own page table.
+        //     // A real implementation would create a new page table and copy mappings (CoW).
+        //     // For now, we create a new PageTable by cloning the inner part of the parent's.
+        //     page_table: Arc::new(Mutex::new(self.page_table.lock().clone())),
+        //     task_id,
+        //     process_id: task_id, // For a new process, process_id is same as task_id
+        //     parent: RwLock::new(Arc::downgrade(&self)), // The parent is the current task
+        //     pcb: Arc::new(Mutex::new(new_pcb)),
+        //     tcb: new_tcb,
+        // });
 
-        new_task
+        // // Add the new task to the parent's children list.
+        // parent_pcb.children.push(new_task.clone());
+        // // Add the main thread to its own thread list.
+        // new_task.pcb.lock().threads.push(Arc::downgrade(&new_task));
+
+        // new_task
     }
 
     // pub fn fork(&self) -> Arc<Self> {
@@ -265,10 +281,9 @@ impl UserTask {
     //     self.pcb.lock().children.push(new_task_arc.clone());
     // }
 
-    pub fn query_va(&self, va: VirtAddr) -> Option<(PhysAddr,MappingFlags)> {
+    pub fn query_va(&self, va: VirtAddr) -> Option<(PhysAddr, MappingFlags)> {
         self.page_table.lock().translate(va)
     }
-
 
     pub fn inner_map<T>(&self, mut f: impl FnMut(&mut MutexGuard<ProcessControlBlock>) -> T) -> T {
         f(&mut self.pcb.lock())
@@ -313,10 +328,6 @@ impl UserTask {
 
     pub fn get_heap(&self) -> usize {
         self.pcb.lock().heap
-    }
-
-    pub fn alloc_map_frame(&self, vaddr: VirtAddr, flags: MappingFlags) {
-        self.page_table.lock().map(vaddr, flags);
     }
 
     pub fn get_last_free_addr(&self, size: usize) -> VirtAddr {
@@ -489,6 +500,8 @@ pub async fn exec_with_process(
                 "elf_segment".to_owned(),
                 MemRegionType::ELF,
             );
+            mem_region.is_mapped = true;
+            user_task.pcb.lock().mem_set.push_region(mem_region.clone());
             let _ = user_task.page_table.lock().map_region_user(&mut mem_region);
         });
 
@@ -509,7 +522,7 @@ pub async fn exec_with_process(
             }
         }
     }
-    
+
     if let Some((sbss_start, sbss_end)) = sbss_range {
         info!("sbss_start: {:#x}, sbss_end: {:#x}", sbss_start, sbss_end);
     }
@@ -517,7 +530,10 @@ pub async fn exec_with_process(
         info!("bss_start: {:#x}, bss_end: {:#x}", bss_start, bss_end);
     }
     if let Some((sdata_start, sdata_end)) = sdata_range {
-        info!("sdata_start: {:#x}, sdata_end: {:#x}", sdata_start, sdata_end);
+        info!(
+            "sdata_start: {:#x}, sdata_end: {:#x}",
+            sdata_start, sdata_end
+        );
     }
     if let Some((data_start, data_end)) = data_range {
         info!("data_start: {:#x}, data_end: {:#x}", data_start, data_end);
@@ -548,9 +564,12 @@ pub async fn exec_with_process(
             }
         }
     }
-    
+
     let paddr = user_task.query_va(VirtAddr::from(0x7ffffda0)).unwrap();
-    info!("test_stack_translate vaddr: {:#x}, paddr: {:#x} flages: {:?}", 0x7ffffda0, paddr.0, paddr.1);
+    info!(
+        "test_stack_translate vaddr: {:#x}, paddr: {:#x} flages: {:?}",
+        0x7ffffda0, paddr.0, paddr.1
+    );
     Ok(user_task)
 }
 
@@ -581,9 +600,21 @@ pub fn init_task_stack(
     let stack_end = USER_STACK_TOP;
     let flags = MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER;
 
-    for addr in (stack_start..stack_end).step_by(PAGE_SIZE) {
-        user_task.alloc_map_frame(VirtAddr::from(addr), flags);
-    }
+    let pages = USER_STACK_INIT_SIZE.div_ceil(PAGE_SIZE);
+    let frames = alloc_continues(pages);
+    let start_paddr = PhysAddr::from(frames[0].paddr.as_usize());
+    let end_paddr = start_paddr + USER_STACK_INIT_SIZE;
+    let mem_region = MemRegion::new_mapped(
+        VirtAddr::from(stack_start),
+        VirtAddr::from(stack_end),
+        start_paddr,
+        end_paddr,
+        flags,
+        "stack".to_string(),
+        MemRegionType::STACK,
+    );
+    user_task.pcb.lock().mem_set.push_region(mem_region.clone());
+    let _ = user_task.page_table.lock().map_region_user(&mut mem_region.clone());
 
     log::debug!(
         "[task {:?}] entry: {:#x}",

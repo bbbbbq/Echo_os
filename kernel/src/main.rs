@@ -69,10 +69,3 @@ pub fn test_ls() {
     info!("file: {:?}", file);
     os_shut_down();
 }
-
-pub fn test_pagetable() {
-    let mut page_table = PageTable::new();
-    page_table.map(VirtAddr::from_usize(0), MappingFlags::READ | MappingFlags::WRITE);
-    let addr = page_table.translate(VirtAddr::from_usize(0)).unwrap();
-    println!("addr: {:x}", addr.0);
-}

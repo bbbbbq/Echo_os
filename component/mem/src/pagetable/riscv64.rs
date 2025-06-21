@@ -267,32 +267,6 @@ impl PageTable {
         walk(self.page_table.root_paddr(), 0, VirtAddr::from_usize(0));
         println!("[kernel] --- End of Mapped Regions ---");
     }
-
-    pub fn map_frame(&mut self, vaddr: VirtAddr) {
-        assert!(vaddr.align_offset_4k() == 0, "vaddr must be 4K aligned");
-        let mut mem_region = MemRegion::new_anonymous(
-            vaddr,
-            vaddr + PAGE_SIZE,
-            MappingFlags::READ | MappingFlags::WRITE,
-            "frame".to_owned(),
-            MemRegionType::DATA,
-        );
-        let _ = self.map_region_user_frame(&mut mem_region);
-    }
-
-    pub fn map(&mut self, vaddr: VirtAddr, flags: MappingFlags) {
-        debug!("pagetable root_addr {:?}", self.page_table.root_paddr());
-        assert!(vaddr.align_offset_4k() == 0, "vaddr must be 4K aligned");
-        let target = alloc_frame().unwrap();
-        debug!(
-            "pagetable map {:?} -> {:?}, flags: {:?}",
-            vaddr, target.paddr, flags
-        );
-        let _ = self
-            .page_table
-            .map(vaddr, target.paddr, PageSize::Size4K, flags);
-
-    }
 }
 
 pub fn change_boot_pagetable() {

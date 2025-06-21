@@ -25,9 +25,7 @@ async fn command(cmd: &str) {
             args_extend.extend(args.into_iter());
             let task_id = add_user_task(&filename, args_extend, Vec::new()).await;
             let task = tid2task(task_id).unwrap();
-            // let task = task.downcast_arc::<crate::executor::thread::UserTask>().expect("Failed to downcast to UserTask");
-            // let paddr = task.page_table.lock().translate(VirtAddr::from_usize(0x1000)).unwrap();
-            // println!("paddr: {:x}", paddr.as_usize());
+
             loop {
                 if task.exit_code().is_some() {
                     release_task(task_id);
@@ -45,7 +43,7 @@ async fn command(cmd: &str) {
 
 pub async fn initproc() {
     println!("start kernel tasks");
-    command("bin/ls").await;
+    command("busybox sh bin/ls").await;
     //command("basic/brk").await;
     // command("chdir").await;
     // command("clone").await;
