@@ -75,7 +75,7 @@ impl UserHandler {
                 UserTaskControlFlow::Continue => {}
             }
 
-            self.check_signal().await;
+           // self.check_signal().await;
 
             // 再次确认线程是否已经退出
             if let Some(exit_code) = self.check_thread_exit() {

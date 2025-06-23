@@ -1,21 +1,21 @@
 use crate::executor::error::TaskError;
-use crate::executor::ops::yield_now;
-use crate::signal::flages::SignalFlags;
-use crate::user_handler::handler::UserHandler;
-use log::{debug, warn};
-use crate::executor::task::{AsyncTask, CloneFlags};
-use crate::user_handler::userbuf::UserBuf;
-use crate::executor::task::AsyncTaskItem;
 use crate::executor::executor::{add_ready_task, tid2task};
-use crate::user_handler::entry::user_entry;
-use crate::executor::sync::WaitPid;
-use trap::trapframe::TrapFrameArgs;
 use crate::executor::id_alloc::TaskId;
-use alloc::string::String;
+use crate::executor::ops::yield_now;
+use crate::executor::sync::WaitPid;
+use crate::executor::task::AsyncTaskItem;
+use crate::executor::task::{AsyncTask, CloneFlags};
+use crate::executor::thread::{UserTask, add_user_task, exec_with_process};
+use crate::signal::flages::SignalFlags;
+use crate::user_handler::entry::user_entry;
+use crate::user_handler::handler::UserHandler;
+use crate::user_handler::userbuf::UserBuf;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use filesystem::path::Path;
-use crate::executor::thread::{add_user_task, UserTask};
+use log::{debug, warn};
 use struct_define::rlimit::Rlimit;
+use trap::trapframe::TrapFrameArgs;
 impl UserHandler {
     pub async fn sys_exit(&self, exit_code: isize) -> Result<usize, TaskError> {
         debug!(
@@ -36,14 +36,24 @@ impl UserHandler {
     ) -> Result<usize, TaskError> {
         debug!(
             "[task {:?}] sys_clone @ flags: {:#x}, stack: {:#x}, ptid: {:?}, tls: {:#x}, ctid: {:?}",
-            self.task.get_task_id(), flags, stack, ptid, tls, ctid
+            self.task.get_task_id(),
+            flags,
+            stack,
+            ptid,
+            tls,
+            ctid
         );
         let flags = CloneFlags::from_bits_truncate(flags);
         debug!(
             "[task {:?}] sys_clone @ flags: {:?}, stack: {:#x}, ptid: {:?}, tls: {:#x}, ctid: {:?}",
-            self.task.get_task_id(), flags, stack, ptid, tls, ctid
+            self.task.get_task_id(),
+            flags,
+            stack,
+            ptid,
+            tls,
+            ctid
         );
-        
+
         let new_task = if flags.contains(CloneFlags::THREAD) {
             self.task.thread_clone()
         } else {
@@ -59,10 +69,10 @@ impl UserHandler {
         }
 
         // TODO: handle ptid and ctid
-        
+
         let new_task_id = new_task.get_task_id();
         add_ready_task(AsyncTaskItem::new(new_task, user_entry()));
-        yield_now().await;
+        // yield_now().await;
         Ok(new_task_id.0)
     }
 
@@ -95,7 +105,7 @@ impl UserHandler {
         }
         if options == 0 || options == 2 || options == 3 || options == 10 {
             debug!(
-                "children:{:?}",
+                "children_num:{:?}",
                 self.task.pcb.lock().children.iter().count()
             );
             let child_task = WaitPid(self.task.clone(), pid).await?;
@@ -183,17 +193,28 @@ impl UserHandler {
             }
         }
 
-        debug!("sys_execve @ filename: {}, args: {:?}, envp: {:?}", file_name, args_vec, envp_vec);
-                let _path = Path::new(file_name.clone());
-        
+        debug!(
+            "sys_execve @ filename: {}, args: {:?}, envp: {:?}",
+            file_name, args_vec, envp_vec
+        );
+        let _path = Path::new(file_name.clone());
+
         // Convert Vec<String> to Vec<&str>
         let args_str: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
         let envp_str: Vec<&str> = envp_vec.iter().map(|s| s.as_str()).collect();
-        let id = add_user_task(&file_name, args_str, envp_str).await;
-        self.task.thread_exit(id.0);
-        Ok(id.0)
+        let curr_dir = self.task.pcb.lock().curr_dir.clone();
+        exec_with_process(
+            self.task.clone(),
+            curr_dir.as_ref().clone(), // Convert Arc<Path> to Path
+            filename.read_string(),    // Convert UserBuf<u8> to String
+            args_str.iter().map(|s| s.to_string()).collect(), // Convert Vec<&str> to Vec<String>
+            envp_str.iter().map(|s| s.to_string()).collect(), // Convert Vec<&str> to Vec<String>
+        )
+        .await?;
+        self.task.before_run();
+        // self.task.thread_exit(id.0);
+        Ok(0)
     }
-
 
     /// sys_getpid() 获取进程 id
     pub async fn sys_getpid(&self) -> Result<usize, TaskError> {
@@ -272,22 +293,64 @@ impl UserHandler {
 
         // Default limits (simplified implementation)
         let default_limits = match resource {
-            RLIMIT_CPU => Rlimit { curr: usize::MAX, max: usize::MAX },
-            RLIMIT_FSIZE => Rlimit { curr: usize::MAX, max: usize::MAX },
-            RLIMIT_DATA => Rlimit { curr: usize::MAX, max: usize::MAX },
-            RLIMIT_STACK => Rlimit { curr: 8 * 1024 * 1024, max: usize::MAX }, // 8MB stack
-            RLIMIT_CORE => Rlimit { curr: 0, max: usize::MAX },
-            RLIMIT_RSS => Rlimit { curr: usize::MAX, max: usize::MAX },
-            RLIMIT_NPROC => Rlimit { curr: 1024, max: 1024 },
-            RLIMIT_NOFILE => Rlimit { curr: 1024, max: 1024 },
-            RLIMIT_MEMLOCK => Rlimit { curr: usize::MAX, max: usize::MAX },
-            RLIMIT_AS => Rlimit { curr: usize::MAX, max: usize::MAX },
-            RLIMIT_LOCKS => Rlimit { curr: usize::MAX, max: usize::MAX },
-            RLIMIT_SIGPENDING => Rlimit { curr: 1024, max: 1024 },
-            RLIMIT_MSGQUEUE => Rlimit { curr: 819200, max: 819200 },
+            RLIMIT_CPU => Rlimit {
+                curr: usize::MAX,
+                max: usize::MAX,
+            },
+            RLIMIT_FSIZE => Rlimit {
+                curr: usize::MAX,
+                max: usize::MAX,
+            },
+            RLIMIT_DATA => Rlimit {
+                curr: usize::MAX,
+                max: usize::MAX,
+            },
+            RLIMIT_STACK => Rlimit {
+                curr: 8 * 1024 * 1024,
+                max: usize::MAX,
+            }, // 8MB stack
+            RLIMIT_CORE => Rlimit {
+                curr: 0,
+                max: usize::MAX,
+            },
+            RLIMIT_RSS => Rlimit {
+                curr: usize::MAX,
+                max: usize::MAX,
+            },
+            RLIMIT_NPROC => Rlimit {
+                curr: 1024,
+                max: 1024,
+            },
+            RLIMIT_NOFILE => Rlimit {
+                curr: 1024,
+                max: 1024,
+            },
+            RLIMIT_MEMLOCK => Rlimit {
+                curr: usize::MAX,
+                max: usize::MAX,
+            },
+            RLIMIT_AS => Rlimit {
+                curr: usize::MAX,
+                max: usize::MAX,
+            },
+            RLIMIT_LOCKS => Rlimit {
+                curr: usize::MAX,
+                max: usize::MAX,
+            },
+            RLIMIT_SIGPENDING => Rlimit {
+                curr: 1024,
+                max: 1024,
+            },
+            RLIMIT_MSGQUEUE => Rlimit {
+                curr: 819200,
+                max: 819200,
+            },
             RLIMIT_NICE => Rlimit { curr: 0, max: 0 },
             RLIMIT_RTPRIO => Rlimit { curr: 0, max: 0 },
-            RLIMIT_RTTIME => Rlimit { curr: usize::MAX, max: usize::MAX },
+            RLIMIT_RTTIME => Rlimit {
+                curr: usize::MAX,
+                max: usize::MAX,
+            },
             _ => return Err(TaskError::EINVAL),
         };
 
@@ -300,12 +363,12 @@ impl UserHandler {
         // For now, we just validate the input but don't actually change limits
         if new_limit.is_valid() {
             let new_limits = new_limit.read();
-            
+
             // Basic validation: current limit should not exceed maximum limit
             if new_limits.curr > new_limits.max {
                 return Err(TaskError::EINVAL);
             }
-            
+
             // TODO: Actually implement limit setting and enforcement
             // This would require storing limits in the task's PCB
         }
@@ -317,11 +380,15 @@ impl UserHandler {
         let signal = SignalFlags::from_num(signum);
         debug!(
             "[task {:?}] sys_kill @ pid: {}, signum: {:?}",
-            self.task.get_task_id(), pid, signal
+            self.task.get_task_id(),
+            pid,
+            signal
         );
 
         let user_task = match tid2task(TaskId(pid)) {
-            Some(task) => task.downcast_arc::<UserTask>().map_err(|_| TaskError::ESRCH),
+            Some(task) => task
+                .downcast_arc::<UserTask>()
+                .map_err(|_| TaskError::ESRCH),
             None => Err(TaskError::ESRCH),
         }?;
 
@@ -335,5 +402,4 @@ impl UserHandler {
     pub async fn sys_gettid(&self) -> Result<usize, TaskError> {
         Ok(self.task.get_task_id().0)
     }
-
 }

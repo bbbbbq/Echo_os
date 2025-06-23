@@ -115,15 +115,10 @@ impl UserHandler {
         let mut tcb = self.task.tcb.write();
         cx.store_ctx(&cx_ref);
         cx.set_pc(tcb.cx[TrapFrameArgs::SEPC]);
-        // 复制掩码位到信号上下文
         cx.sig_mask.mask = sigaction.mask.mask;
         tcb.cx[TrapFrameArgs::SP] = sp;
         tcb.cx[TrapFrameArgs::SEPC] = sigaction.handler;
-        // 若用户未指定 restorer，则动态在用户栈生成一个执行 sys_sigreturn 的跳板，
-        // 避免返回地址为 0 触发页错误。
         tcb.cx[TrapFrameArgs::RA] = if sigaction.restorer == 0 {
-            // SIG_RETURN_ADDR
-            // TODO: add sigreturn addr.
             0
         } else {
             sigaction.restorer
@@ -153,7 +148,7 @@ impl UserHandler {
             let res = self.handle_syscall(cx_ref).await;
             debug!("[task {:?}] syscall result: {}", self.task.get_task_id(), res);
             if let UserTaskControlFlow::Break = res {
-                return;
+                break;
             }
         }
         info!(

@@ -82,7 +82,7 @@ impl Executor {
         };
         if let Some(task) = task {
             let task_id = task.task.get_task_id();
-            info!("run_ready_task poll Task {:?}", task_id);
+            //info!("run_ready_task poll Task {:?}", task_id);
             
             let AsyncTaskItem { task, mut future } = task;
             
@@ -98,14 +98,13 @@ impl Executor {
 
             match future.as_mut().poll(&mut context) {
                 Poll::Ready(()) => {
-                    info!("run_ready_task Task {:?} completed", task_id);
-                    // 任务已完成，从任务映射表中移除
-                    release_task(task_id);
+                    //info!("run_ready_task Task {:?} completed", task_id);
+                    // // 任务已完成，从任务映射表中移除
+                    // release_task(task_id);
                 }
                 Poll::Pending => {
-                    info!("run_ready_task Task {:?} pending, re-queue", task_id);
+                    //info!("run_ready_task Task {:?} pending, re-queue", task_id);
                     TASK_QUEUE.lock().push_back(AsyncTaskItem { future, task });
-                    yield_now();
                 }
             }
         }
@@ -113,18 +112,18 @@ impl Executor {
 
     pub fn run(&self) {
         loop {
-            static PRINT_COUNTER: AtomicUsize = AtomicUsize::new(0);
-            if PRINT_COUNTER.fetch_add(1, Ordering::Relaxed) % 5000 == 0 {
-                let task_ids: Vec<_> = TASK_QUEUE.lock().iter().map(|task| task.task.get_task_id()).collect();
-                info!("TASK_QUEUE IDs: {:?}", task_ids);
+            // static PRINT_COUNTER: AtomicUsize = AtomicUsize::new(0);
+            // if PRINT_COUNTER.fetch_add(1, Ordering::Relaxed) % 5000 == 0 {
+            //     let task_ids: Vec<_> = TASK_QUEUE.lock().iter().map(|task| task.task.get_task_id()).collect();
+            //     info!("TASK_QUEUE IDs: {:?}", task_ids);
                 
-                let task_map_ids: Vec<_> = TASK_MAP.lock().keys().cloned().collect();
-                info!("TASK_MAP IDs: {:?}", task_map_ids);
-            }
-            if TASK_QUEUE.lock().is_empty() && TASK_MAP.lock().is_empty() {
-                info!("No tasks remaining, shutting down.");
-                arch::os_shut_down();
-            }
+            //     let task_map_ids: Vec<_> = TASK_MAP.lock().keys().cloned().collect();
+            //     info!("TASK_MAP IDs: {:?}", task_map_ids);
+            // }
+            // if TASK_QUEUE.lock().is_empty() && TASK_MAP.lock().is_empty() {
+            //     info!("No tasks remaining, shutting down.");
+            //     arch::os_shut_down();
+            // }
 
             self.run_ready_task();
         }

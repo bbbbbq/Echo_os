@@ -308,7 +308,7 @@ impl UserTask {
         assert_eq!(parent_sp, child_sp, "Stack pointer mismatch");
 
         //比较两个pagetable的虚拟地址和物理地址的映射是否一致
-
+        //打印每一个mem_map_trace的引用计数
         drop(new_pcb);
         drop(parent_task);
         new_task
