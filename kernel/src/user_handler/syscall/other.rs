@@ -172,7 +172,7 @@ impl UserHandler {
         use core::sync::atomic::{AtomicU64, Ordering};
         static SEED: AtomicU64 = AtomicU64::new(0x1234_5678_9abc_def0);
         let mut written = 0;
-        let mut buffer = buf.slice_mut_with_len(buflen);
+        let buffer = buf.slice_mut_with_len(buflen);
         for b in buffer.iter_mut() {
             let old = SEED.load(Ordering::Relaxed);
             let new = old.wrapping_mul(6364136223846793005).wrapping_add(1);

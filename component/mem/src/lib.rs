@@ -6,6 +6,7 @@ pub mod memregion;
 pub mod memset;
 pub mod pag_hal;
 pub mod pagetable;
+pub mod maptrace;
 use memory_addr::{VirtAddr, PhysAddr};
 // Define multi-architecture modules and pub use them.
 cfg_if::cfg_if! {

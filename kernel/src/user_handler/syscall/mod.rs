@@ -1,10 +1,12 @@
 use super::handler::UserHandler;
 use super::handler::UserTaskControlFlow;
+use log::debug;
 use struct_define::iov::IoVec;
 use struct_define::poll_event::PollFd;
 use struct_define::tms::TMS;
 use struct_define::uname::UTSname;
 use struct_define::rlimit::Rlimit;
+use timer::get_time;
 use trap::trap::EscapeReason;
 use trap::trap::run_user_task;
 use trap::trapframe::{TrapFrame, TrapFrameArgs};
@@ -27,31 +29,40 @@ pub mod signal;
 
 impl UserHandler {
     pub async fn handle_syscall(&mut self, cx_ref: &mut TrapFrame) -> UserTaskControlFlow {
+        let ustart = get_time();
         if matches!(run_user_task(cx_ref), EscapeReason::SysCall) {
-            if cx_ref.get_sysno() == sysnum::SYS_SIGRETURN as _ {
+            self.task
+                .inner_map(|inner| {
+                    if let Some(ref mut time) = inner.time {
+                        *time += get_time() - ustart;
+                    }
+                });
+
+            let sstart = get_time();
+            if cx_ref[TrapFrameArgs::SYSCALL] == sysnum::SYS_SIGRETURN as _ {
+                debug!("[task {:?}] sys_sigreturn", self.task.get_task_id());
                 return UserTaskControlFlow::Break;
             }
-            info!(
-                "[task {:?}] syscall: {} at sepc: {:#x}",
-                self.task.get_task_id(),
-                cx_ref.get_sysno(),
-                cx_ref.sepc
-            );
-
             cx_ref.syscall_ok();
             let result = self
-                .syscall(cx_ref.get_sysno(), cx_ref.args())
+                .syscall(cx_ref[TrapFrameArgs::SYSCALL], cx_ref.args())
                 .await
                 .map_or_else(|e| -e.into_raw() as isize, |x| x as isize)
                 as usize;
 
-            info!(
+            debug!(
                 "[task {:?}] syscall result: {}",
                 self.task.get_task_id(),
                 result as isize
             );
 
             cx_ref[TrapFrameArgs::RET] = result;
+            self.task
+                .inner_map(|inner| {
+                    if let Some(time) = &mut inner.time {
+                        *time += get_time() - sstart;
+                    }
+                });
         }
         UserTaskControlFlow::Continue
     }
@@ -102,6 +113,9 @@ impl UserHandler {
                 let set = UserBuf::new(_args[1] as *mut SigProcMask);
                 let oldset = UserBuf::new(_args[2] as *mut SigProcMask);
                 self.sys_sigprocmask(how, set, oldset).await
+            }
+            sysnum::SYS_GETTID => {
+                self.sys_gettid().await
             }
             sysnum::SYS_GETCWD => {
                 let buf_ptr = UserBuf::new(_args[0] as *mut u8);

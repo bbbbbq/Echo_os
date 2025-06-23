@@ -1,23 +1,23 @@
-use core::slice::from_raw_parts_mut;
 
 use crate::executor::error::TaskError;
 use crate::executor::task::AsyncTask;
 use crate::user_handler::handler::UserHandler;
-use alloc::string::ToString;
 use config::target::plat::PAGE_SIZE;
-use filesystem::file::File;
 use frame::alloc_continues;
-use frame::dealloc_continues;
 use log::debug;
 use mem::memregion::MemRegion;
 use mem::memregion::MemRegionType;
-use memory_addr::VirtAddr;
 use memory_addr::align_up;
+use memory_addr::{PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange};
 use page_table_multiarch::MappingFlags;
 
 impl UserHandler {
     pub async fn sys_brk(&mut self, addr: usize) -> Result<usize, TaskError> {
-        debug!("sys_brk @ new: {:#x} old: {:#x}", addr, self.task.get_heap());
+        debug!(
+            "sys_brk @ new: {:#x} old: {:#x}",
+            addr,
+            self.task.get_heap()
+        );
         match addr {
             0 => Ok(self.task.get_heap()),
             _ => Ok(self.task.sbrk(addr)),
@@ -76,37 +76,27 @@ impl UserHandler {
         }
         let start_paddr = frame_tracers[0].paddr;
 
-        let mut mem_region = MemRegion::new_mapped(
-            start_vaddr,
-            end_vaddr,
-            start_paddr,
-            start_paddr + aligned_len, // end_paddr
-            mapping_flags,
-            "mmap".to_string(),
-            MemRegionType::MMAP,
+        let vaddr_range = VirtAddrRange::new(start_vaddr, end_vaddr);
+        let paddr_range = PhysAddrRange::new(
+            PhysAddr::from(start_paddr),
+            PhysAddr::from(start_paddr + aligned_len),
         );
-        mem_region.frames = Some(frame_tracers);
 
-        self.task
-            .page_table
-            .lock()
-            .map_region_user(&mut mem_region)
-            .map_err(|()| {
-                if let Some(frames) = mem_region.frames.take() {
-                    if !frames.is_empty() {
-                        dealloc_continues(frames[0], frames.len());
-                    }
-                }
-                TaskError::EFAULT
-            })?;
+        let mut mem_region = MemRegion::new_mapped(vaddr_range, paddr_range, mapping_flags);
+        mem_region.region_type = MemRegionType::MMAP;
 
-        let buffer = unsafe {
-            core::slice::from_raw_parts_mut(start_vaddr.as_mut_ptr(), aligned_len)
-        };
+        let _ = self.task.page_table.lock().map_region_user(&mut mem_region);
+
+        let buffer =
+            unsafe { core::slice::from_raw_parts_mut(start_vaddr.as_mut_ptr(), aligned_len) };
 
         if flags & MAP_ANONYMOUS == 0 {
             if offset % PAGE_SIZE != 0 {
-                self.task.pcb.lock().mem_set.unmap_region(start_vaddr.as_usize(), aligned_len, &mut self.task.page_table.lock());
+                self.task.pcb.lock().mem_set.unmap_region(
+                    start_vaddr.as_usize(),
+                    aligned_len,
+                    &mut self.task.page_table.lock(),
+                );
                 return Err(TaskError::EINVAL);
             }
             let file = self.task.get_fd(fd).ok_or(TaskError::EBADF)?;

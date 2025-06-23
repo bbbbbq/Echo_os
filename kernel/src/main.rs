@@ -2,9 +2,6 @@
 #![no_main]
 use arch::os_shut_down;
 use console::println;
-use mem::pagetable::PageTable;
-use memory_addr::VirtAddr;
-use page_table_multiarch::MappingFlags;
 use core::panic::PanicInfo;
 use device::init_dt;
 use filesystem::file::File;
@@ -16,8 +13,6 @@ use heap;
 // define module removed
 use log::{error, info};
 extern crate alloc;
-use alloc::vec::Vec;
-use filesystem::vfs::DirEntry;
 pub mod executor;
 use crate::alloc::string::ToString;
 use boot;

@@ -1,6 +1,6 @@
 use core::cmp;
 
-use crate::alloc::string::{String, ToString};
+use crate::alloc::string::ToString;
 use crate::executor::error::TaskError;
 use crate::executor::ops::{yield_now, sleep_for_duration, terminal_wait};
 use filesystem::devfs::devfs::{DevFsDirInode, DevType};
@@ -8,18 +8,16 @@ use filesystem::file::{File, OpenFlags, Stat};
 use filesystem::mount::{mount_inode, umount_fs};
 use filesystem::path::Path;
 use filesystem::pipe::create_pipe;
-use filesystem::vfs::{DirEntry, FileAttr, FileType, VfsError};
+use filesystem::vfs::VfsError;
 use log::{debug, info};
 use memory_addr::VirtAddr;
 use struct_define::iov::IoVec;
 use struct_define::poll_event::{PollEvent, PollFd};
-use struct_define::termios::{Termios, Winsize, TCGETS, TCSETS, TCSETSW, TCSETSF, TIOCGWINSZ, TIOCSPGRP, TIOCGPGRP};
 use struct_define::timespec::TimeSpec;
 use crate::user_handler::handler::UserHandler;
 use crate::user_handler::userbuf::UserBuf;
 use timer::current_nsec;
 use alloc::sync::Arc;
-use alloc::vec::Vec;
 
 const AT_FDCWD: isize = -100;
 
@@ -539,7 +537,7 @@ impl UserHandler {
         }
 
         // Get the pathname string
-        let path_str = pathname.get_cstr();
+        let _path_str = pathname.get_cstr();
         
         // For now, we'll implement a basic version that handles simple cases
         // In a full implementation, we would:

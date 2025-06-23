@@ -1,46 +1,194 @@
 pub mod list;
 pub mod flages;
+use cfg_if::cfg_if;
+pub use flages::{SigProcMask, SigMaskHow};
 
-#[derive(Debug, Clone, Copy)]
-pub struct SigProcMask {
-    pub mask: usize,
+
+use trap::trapframe::TrapFrame;
+use bitflags::bitflags;
+
+
+bitflags! {
+    #[derive(Debug, Clone)]
+    pub struct SignalStackFlags : u32 {
+        const ONSTACK = 1;
+        const DISABLE = 2;
+        const AUTODISARM = 0x80000000;
+    }
 }
 
-
-
-#[derive(Debug, Clone, Copy)]
-#[repr(u8)]
-pub enum SigMaskHow {
-    Block,
-    Unblock,
-    Setmask,
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct SignalStack {
+    pub sp: usize,
+    pub flags: SignalStackFlags,
+    pub size: usize,
 }
 
-impl SigMaskHow {
-    pub fn from_usize(how: usize) -> Option<Self> {
-        match how {
-            0 => Some(SigMaskHow::Block),
-            1 => Some(SigMaskHow::Unblock),
-            2 => Some(SigMaskHow::Setmask),
-            _ => None,
+cfg_if! {
+    if #[cfg(target_arch = "x86_64")] {
+        #[repr(C)]
+        #[derive(Debug, Clone)]
+        pub struct SignalUserContext {
+            pub flags: usize,          // 0
+            pub link: usize,           // 1
+            pub stack: SignalStack,    // 2
+            pub gregs: [usize; 32],
+            pub sig_mask: SigProcMask, // sigmask
+            pub _pad: [u64; 16],       // sigmask extend
+            pub __fpregs_mem: [u64; 64]
         }
-    }
-}
 
-impl SigProcMask {
-    pub fn new() -> Self {
-        Self { mask: 0 }
-    }
+        impl SignalUserContext {
+            pub fn pc(&self) -> usize {
+                self.gregs[16]
+            }
 
-    pub fn handle(&mut self, how: SigMaskHow, mask: &Self) {
-        self.mask = match how {
-            SigMaskHow::Block => self.mask | mask.mask,
-            SigMaskHow::Unblock => self.mask & (!mask.mask),
-            SigMaskHow::Setmask => mask.mask,
+            pub fn set_pc(&mut self, v: usize) {
+                self.gregs[16] = v;
+            }
+
+            pub fn store_ctx(&mut self, ctx: &TrapFrame) {
+                self.gregs[0] = ctx.r8;
+                self.gregs[1] = ctx.r9;
+                self.gregs[2] = ctx.r10;
+                self.gregs[3] = ctx.r11;
+                self.gregs[4] = ctx.r12;
+                self.gregs[5] = ctx.r13;
+                self.gregs[6] = ctx.r14;
+                self.gregs[7] = ctx.r15;
+                self.gregs[8] = ctx.rdi;
+                self.gregs[9] = ctx.rsi;
+                self.gregs[10] = ctx.rbp;
+                self.gregs[11] = ctx.rbx;
+                self.gregs[12] = ctx.rdx;
+                self.gregs[13] = ctx.rax;
+                self.gregs[14] = ctx.rcx;
+                self.gregs[15] = ctx.rsp;
+                self.gregs[16] = ctx.rip;
+            }
+
+            pub fn restore_ctx(&self, ctx: &mut TrapFrame) {
+                ctx.r8  = self.gregs[0];
+                ctx.r9  = self.gregs[1];
+                ctx.r10 = self.gregs[2];
+                ctx.r11 = self.gregs[3];
+                ctx.r12 = self.gregs[4];
+                ctx.r13 = self.gregs[5];
+                ctx.r14 = self.gregs[6];
+                ctx.r15 = self.gregs[7];
+                ctx.rdi = self.gregs[8];
+                ctx.rsi = self.gregs[9];
+                ctx.rbp = self.gregs[10];
+                ctx.rbx = self.gregs[11];
+                ctx.rdx = self.gregs[12];
+                ctx.rax = self.gregs[13];
+                ctx.rcx = self.gregs[14];
+                ctx.rsp = self.gregs[15];
+                ctx.rip = self.gregs[16];
+            }
         }
-    }
+    } else if #[cfg(target_arch = "riscv64")] {
+        #[repr(C)]
+        #[derive(Debug, Clone)]
+        pub struct SignalUserContext {
+            pub flags: usize,          // 0
+            pub link: usize,           // 1
+            pub stack: SignalStack,    // 2
+            pub sig_mask: SigProcMask, // 5
+            pub _pad: [u64; 16],       // mask
+            pub gregs: [usize; 32],
+            pub pc: usize,             // 保存 sepc
+            pub fpstate: [usize; 66],
+        }
 
-    pub fn masked(&self, signum: usize) -> bool {
-        (self.mask >> signum) & 1 == 0
+        impl SignalUserContext {
+            pub fn pc(&self) -> usize {
+                self.pc
+            }
+
+            pub fn set_pc(&mut self, v: usize) {
+                self.pc = v;
+            }
+
+            pub fn store_ctx(&mut self, ctx: &TrapFrame) {
+                self.gregs = ctx.x;
+                self.pc = ctx.sepc;
+            }
+
+            pub fn restore_ctx(&self, ctx: &mut TrapFrame) {
+                ctx.x = self.gregs;
+                ctx.sepc = self.pc;
+            }
+        }
+    } else if #[cfg(target_arch = "aarch64")] {
+        #[repr(C)]
+        #[derive(Debug, Clone)]
+        pub struct SignalUserContext {
+            pub flags: usize,          // 0
+            pub link: usize,           // 1
+            pub stack: SignalStack,    // 2
+            pub sig_mask: SigProcMask, // 5
+            pub _pad: [u64; 16],       // mask
+            pub fault_address: usize,
+            pub regs: [usize; 31],
+            pub sp: usize,
+            pub pc: usize,
+            pub pstate: usize,
+            pub __reserved: usize,
+        }
+
+        impl SignalUserContext {
+            pub fn pc(&self) -> usize {
+                self.pc
+            }
+
+            pub fn set_pc(&mut self, v: usize) {
+                self.pc = v;
+            }
+
+            pub fn store_ctx(&mut self, ctx: &TrapFrame) {
+                self.regs = ctx.regs;
+            }
+
+            pub fn restore_ctx(&self, ctx: &mut TrapFrame) {
+                ctx.regs = self.regs;
+            }
+        }
+    } else if #[cfg(target_arch = "loongarch64")] {
+        #[repr(C)]
+        #[derive(Debug, Clone)]
+        pub struct SignalUserContext {
+            pub flags: usize,          // 0
+            pub link: usize,           // 1
+            pub stack: SignalStack,    // 2
+            pub sig_mask: SigProcMask, // 5
+            pub _pad: [u64; 2],       // mask
+            pub pc: usize,
+            pub gregs: [usize; 32],
+            pub gflags: u32,
+            pub fcsr: u32,
+            pub scr: [usize; 4],
+            pub fregs: [usize; 32],        // _extcontext
+            pub _reserved: [usize; 512],
+        }
+
+        impl SignalUserContext {
+            pub fn pc(&self) -> usize {
+                self.pc
+            }
+
+            pub fn set_pc(&mut self, v: usize) {
+                self.pc = v;
+            }
+
+            pub fn store_ctx(&mut self, ctx: &TrapFrame) {
+                self.gregs = ctx.regs;
+            }
+
+            pub fn restore_ctx(&self, ctx: &mut TrapFrame) {
+                ctx.regs = self.gregs;
+            }
+        }
     }
 }

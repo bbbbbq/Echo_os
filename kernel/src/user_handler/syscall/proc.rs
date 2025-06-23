@@ -62,6 +62,7 @@ impl UserHandler {
         
         let new_task_id = new_task.get_task_id();
         add_ready_task(AsyncTaskItem::new(new_task, user_entry()));
+        yield_now().await;
         Ok(new_task_id.0)
     }
 
@@ -329,6 +330,10 @@ impl UserHandler {
         yield_now().await;
 
         Ok(0)
+    }
+
+    pub async fn sys_gettid(&self) -> Result<usize, TaskError> {
+        Ok(self.task.get_task_id().0)
     }
 
 }

@@ -73,9 +73,6 @@ impl PageTable {
     pub fn restore(&mut self) -> Result<(), ()> {
         self.release();
         let paddr = unsafe { boot_page_table() };
-        // if paddr >= VIRT_ADDR_START {
-        //     paddr -= VIRT_ADDR_START;
-        // }
         let boot_pte_arrary = paddr as *mut [u64; 512];
         let current_pte_arrary = self.page_table.root_paddr().as_usize() as *mut [u64; 512];
         unsafe {
@@ -86,51 +83,33 @@ impl PageTable {
         }
 
         let (start_addr, end_addr) = get_frame_start_end();
-        debug!("start_addr: {:x}, end_addr: {:x}", start_addr, end_addr);
-        let mut mem_region = MemRegion {
-            name: "Frame".to_owned(),
-            vaddr_range: AddrRange::new(
-                VirtAddr::from_usize(start_addr),
-                VirtAddr::from_usize(end_addr),
-            ),
-            paddr_range: Some(AddrRange::new(
-                PhysAddr::from_usize(start_addr),
-                PhysAddr::from_usize(end_addr),
-            )),
-            pte_flags: MappingFlags::READ | MappingFlags::WRITE,
-            region_type: MemRegionType::DATA,
-            is_mapped: false,
-            frames: None,
-        };
-        self.map_region_user(&mut mem_region)?;
+        debug!(
+            "frame start_addr: {:x}, end_addr: {:x}",
+            start_addr, end_addr
+        );
+        self.map_direct(
+            VirtAddr::from_usize(start_addr),
+            end_addr - start_addr,
+            MappingFlags::READ | MappingFlags::WRITE,
+        );
 
         let (mmio_start, mmio_end) = get_mmio_start_end();
-        debug!("mmio_start: {:x}, mmio_end: {:x}", mmio_start, mmio_end);
-        let mut mem_region = MemRegion {
-            name: "mmio_segment".to_owned(),
-            vaddr_range: AddrRange::new(
+        debug!(
+            "mmio start_addr: {:x}, mmio_end: {:x}",
+            mmio_start, mmio_end
+        );
+        let mut mem_region = MemRegion::new_mapped(
+            AddrRange::new(
                 VirtAddr::from_usize(mmio_start),
                 VirtAddr::from_usize(mmio_end),
             ),
-            paddr_range: Some(AddrRange::new(
+            AddrRange::new(
                 PhysAddr::from_usize(mmio_start),
                 PhysAddr::from_usize(mmio_end),
-            )),
-            pte_flags: MappingFlags::READ | MappingFlags::WRITE,
-            region_type: MemRegionType::DATA,
-            is_mapped: false,
-            frames: None,
-        };
+            ),
+            MappingFlags::READ | MappingFlags::WRITE,
+        );
         self.map_region_user(&mut mem_region)?;
-
-        // let mut stack_region = MemRegion::new_anonymous(
-        //     (USER_STACK_TOP - USER_STACK_INIT_SIZE).into(),
-        //     (USER_STACK_TOP).into(),
-        //     MappingFlags::READ | MappingFlags::WRITE,
-        //     "stack_segment".to_owned(),
-        //     MemRegionType::DATA,
-        // );
-        // self.map_region_user_frame(&mut stack_region);
 
         Ok(())
     }
@@ -144,86 +123,33 @@ impl PageTable {
         }
     }
 
-    pub fn map_region_user_frame(&mut self, area: &mut MemRegion) {
-        let start_vaddr = area.vaddr_range.start;
-        let size = area.vaddr_range.size();
-        if PAGE_SIZE == 0 {
-            panic!("PAGE_SIZE is zero, division by zero in map_region_kernel");
-        }
-        let paddr_range = alloc_continues(size / PAGE_SIZE);
-        let get_paddr = |vaddr: VirtAddr| -> PhysAddr {
-            let offset = vaddr.as_usize() - area.vaddr_range.start.as_usize();
-            PhysAddr::from_usize(paddr_range[0].paddr.as_usize() + offset)
-        };
-
-        let _ = self
-            .page_table
-            .map_region(start_vaddr, get_paddr, size, area.pte_flags, true, true)
-            .expect("Failed to map region in page table");
-        area.is_mapped = true;
-    }
-
-    pub fn map_mem_set_frame(&mut self, mem_set: MemSet) {
-        for mut region in mem_set.regions.into_iter() {
-            self.map_region_user_frame(&mut region);
-        }
-    }
-
-    pub fn map_mem_set_user(&mut self, mem_set: MemSet) -> Result<(), ()> {
-        for mut region in mem_set.regions.into_iter() {
-            self.map_region_user(&mut region)?;
-        }
-        Ok(())
-    }
-
     pub fn change_pagetable(&self) {
         change_pagetable(self.page_table.root_paddr().as_usize())
     }
 
     pub fn map_region_user(&mut self, region: &mut MemRegion) -> Result<(), ()> {
-        info!("region : {:?}", region);
-        if let Some(paddr_range) = region.paddr_range {
-            let start_vaddr = region.vaddr_range.start;
-            let size = region.vaddr_range.size();
-            let get_paddr = |vaddr: VirtAddr| -> PhysAddr {
-                let offset: usize = vaddr.as_usize() - region.vaddr_range.start.as_usize();
-                paddr_range.start.add(offset)
-            };
-
-            let _ = self
-                .page_table
-                .map_region(start_vaddr, get_paddr, size, region.pte_flags, true, true)
-                .map_err(|_e| ())?;
-
-            region.is_mapped = true;
-            arch::flush_tlb();
-            Ok(())
-        } else {
-            error!("Failed to map region in page table because paddr_range is None");
-            Err(())
+        //info!("region : {:?}", region);
+        let map_traces = region.map_traces.clone();
+        for trace in map_traces {
+            let _ = self.page_table.map(
+                trace.vaddr,
+                trace.frame.paddr,
+                PageSize::Size4K,
+                trace.pte_flags,
+            );
         }
+        Ok(())
     }
 
     pub fn flush() {
         arch::flush_tlb();
     }
 
-    pub fn translate(&self, vaddr: VirtAddr) -> Option<(PhysAddr,MappingFlags)> {
+    pub fn translate(&self, vaddr: VirtAddr) -> Option<(PhysAddr, MappingFlags)> {
         match self.page_table.query(vaddr) {
             Ok((paddr, flags, _page_size)) => Some((paddr, flags)),
             Err(_) => None,
         }
-    }
-
-    pub fn unmap_region(&mut self, region: &mut MemRegion) {
-        let start_vaddr = region.vaddr_range.start;
-        let size = region.vaddr_range.size();
-        let _ = self
-            .page_table
-            .unmap_region(start_vaddr, size, true)
-            .expect("Failed to unmap region in page table");
-        region.is_mapped = false;
-        arch::flush_tlb();
     }
 
     pub fn print_maped_region(&self) {
@@ -269,12 +195,51 @@ impl PageTable {
     }
 
     pub fn protect_region(&mut self, region: &mut MemRegion, flags: MappingFlags) {
-        let start_vaddr = region.vaddr_range.start;
-        let size = region.vaddr_range.size();
-        let _ = self
-            .page_table
-            .protect_region(start_vaddr, size, flags, true)
-            .expect("Failed to protect region in page table");
+        let map_traces = region.map_traces.clone();
+        for trace in map_traces {
+            let _ = self
+                .page_table
+                .protect_region(trace.vaddr, PAGE_SIZE, flags, true);
+        }
+    }
+
+    pub fn map_direct(&mut self, vaddr_start: VirtAddr, size: usize, flags: MappingFlags) {
+        assert!(
+            vaddr_start.align_offset_4k() == 0,
+            "vaddr_start is not 4K aligned"
+        );
+        assert!(size % PAGE_SIZE == 0, "size is not 4K aligned");
+        assert!(
+            (vaddr_start + size).align_offset_4k() == 0,
+            "vaddr_end is not 4K aligned"
+        );
+
+        let pages = size.div_ceil(PAGE_SIZE);
+        let _ = self.page_table.map_region(
+            vaddr_start,
+            |vaddr| {
+                let p = if vaddr.as_usize() >= VIRT_ADDR_START {
+                    vaddr.as_usize() - VIRT_ADDR_START
+                } else {
+                    vaddr.as_usize()
+                };
+                PhysAddr::from(p)
+            },
+            pages * PAGE_SIZE,
+            flags,
+            true,
+            true,
+        );
+    }
+
+    pub fn get_root_addr_arrary(&self) -> &[u64; 512] {
+        // SAFETY: 根页表占用固定的 512 个 u64 条目（4KiB），指针转换后解引用为共享只读引用是安全的。
+        unsafe { &*(self.page_table.root_paddr().as_usize() as *const [u64; 512]) }
+    }
+
+    pub fn get_pte_array(&self,base_addr:PhysAddr) -> &[u64; 512] {
+        // SAFETY: 页表同样为 4KiB（512 个 u64），指针转换后解引用为共享只读引用是安全的。
+        unsafe { &*(base_addr.as_usize() as *const [u64; 512]) }
     }
 }
 

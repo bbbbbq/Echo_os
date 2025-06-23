@@ -2,9 +2,14 @@ use super::task::AsyncTask;
 use super::task::AsyncTaskItem;
 use alloc::{sync::Arc, vec::Vec};
 use arch::{get_cpu_num, get_cur_cpu_id};
+use futures_lite::future::yield_now;
+use log::debug;
 use log::info;
+use core::sync::atomic::Ordering;
 use core::sync::atomic::AtomicBool;
+use core::sync::atomic::AtomicUsize;
 use spin::Mutex;
+use crate::executor::error;
 use crate::executor::id_alloc::TaskId;
 use crate::executor::thread::UserTask;
 use alloc::collections::{BTreeMap, VecDeque};
@@ -65,6 +70,7 @@ impl Executor {
 
     /// Run a ready task
     pub fn run_ready_task(&self) {
+        // debug!("run_ready_task");
         assert!(
             self.is_inited.load(core::sync::atomic::Ordering::Acquire),
             "Executor not initialized"
@@ -76,26 +82,9 @@ impl Executor {
         };
         if let Some(task) = task {
             let task_id = task.task.get_task_id();
-            info!("Running task with ID: {:?}", task_id);
+            info!("run_ready_task poll Task {:?}", task_id);
             
             let AsyncTaskItem { task, mut future } = task;
-
-            // ****************** test ****************** 
-
-            // if let Some(task_ref) = task.downcast_ref::<UserTask>() {
-            //     // Task is a UserTask
-            //     info!("Running UserTask with ID: {:?}", task_ref.get_task_id());
-            //     let pagetable = task_ref.page_table.clone();
-            //     // 测试高于0xffffffc的地址
-            //     let test_addr = VirtAddr::from(0xffff_ffc0_0000_0000);
-            //     if let Some(phys_addr) = pagetable.translate(test_addr) {
-            //         info!("Translated 0xffff_ffc0_0000_0000 to physical address: {:?}", phys_addr);
-            //     } else {
-            //         error!("Failed to translate address 0xffff_ffc0_0000_0000");
-            //     }
-            // }
-
-            // ****************** test_end ****************** 
             
             task.before_run();
             // info!("task : {:?}", task);
@@ -105,19 +94,38 @@ impl Executor {
                 task_id: task.get_task_id(),
             })
             .into();
-            let mut context = Context::from_waker(&waker);
+            let mut context: Context<'_> = Context::from_waker(&waker);
 
             match future.as_mut().poll(&mut context) {
                 Poll::Ready(()) => {
-                    info!("Task {:?} completed", task_id);
+                    info!("run_ready_task Task {:?} completed", task_id);
+                    // 任务已完成，从任务映射表中移除
+                    release_task(task_id);
                 }
-                Poll::Pending => TASK_QUEUE.lock().push_back(AsyncTaskItem { future, task }),
+                Poll::Pending => {
+                    info!("run_ready_task Task {:?} pending, re-queue", task_id);
+                    TASK_QUEUE.lock().push_back(AsyncTaskItem { future, task });
+                    yield_now();
+                }
             }
         }
     }
 
     pub fn run(&self) {
         loop {
+            static PRINT_COUNTER: AtomicUsize = AtomicUsize::new(0);
+            if PRINT_COUNTER.fetch_add(1, Ordering::Relaxed) % 5000 == 0 {
+                let task_ids: Vec<_> = TASK_QUEUE.lock().iter().map(|task| task.task.get_task_id()).collect();
+                info!("TASK_QUEUE IDs: {:?}", task_ids);
+                
+                let task_map_ids: Vec<_> = TASK_MAP.lock().keys().cloned().collect();
+                info!("TASK_MAP IDs: {:?}", task_map_ids);
+            }
+            if TASK_QUEUE.lock().is_empty() && TASK_MAP.lock().is_empty() {
+                info!("No tasks remaining, shutting down.");
+                arch::os_shut_down();
+            }
+
             self.run_ready_task();
         }
     }
@@ -146,10 +154,20 @@ pub fn get_cur_usr_task() -> Option<Arc<UserTask>> {
 
 /// Release a task
 pub fn release_task(task_id: TaskId) {
+    error!("release task: {:?}", task_id);
     TASK_MAP.lock().remove(&task_id);
     let executor = &GLOBLE_EXECUTOR;
-    executor.cores[get_cur_cpu_id()].lock().take();
-    TASK_QUEUE.lock().retain(|item| item.task.get_task_id() != task_id);    
+    for core_lock in executor.cores.iter() {
+        let mut guard = core_lock.lock();
+        if let Some(task) = guard.as_ref() {
+            if task.get_task_id() == task_id {
+                guard.take();
+            }
+        }
+    }
+
+    // // 移除任务队列中残留的待释放任务
+    // TASK_QUEUE.lock().retain(|item: &AsyncTaskItem| item.task.get_task_id() != task_id);
 }
 
 /// Spawn a blank task
@@ -175,4 +193,11 @@ pub fn info_task_queue() {
         let inner = task.task.clone();
         info!("task : {:?}", inner);
     }
+}
+
+
+pub fn get_cur_task() -> Option<Arc<dyn AsyncTask>> {
+    let executor = &GLOBLE_EXECUTOR;
+    let task_option_guard = executor.cores[get_cur_cpu_id()].lock();
+    task_option_guard.clone()
 }

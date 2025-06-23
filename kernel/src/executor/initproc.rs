@@ -1,8 +1,9 @@
+use alloc::boxed::Box;
 use arch::os_shut_down;
 
-use crate::executor::error;
+use log::error;
 use crate::executor::ops::yield_now;
-use crate::executor::executor::{release_task, TASK_MAP, tid2task};
+use crate::executor::executor::{release_task, tid2task, TASK_MAP, TASK_QUEUE};
 use crate::executor::thread::add_user_task;
 use alloc::vec::Vec;
 use filesystem::file::OpenFlags;
@@ -10,8 +11,7 @@ use filesystem::file::File;
 use console::println;
 use log::info;
 use log::debug;
-use crate::executor::task::TaskType;
-use log::error;
+use crate::executor::task::{AsyncTaskItem, TaskType};
 use alloc::vec;
 
 async fn command(cmd: &str) {
@@ -43,6 +43,7 @@ async fn command(cmd: &str) {
 
 pub async fn initproc() {
     println!("start kernel tasks");
+    command("busybox sh").await;
     command("busybox sh").await;
     //command("basic/brk").await;
     // command("chdir").await;
@@ -77,12 +78,14 @@ pub async fn initproc() {
     // command("yield").await;
 
     // Shutdown if there just have blankkernel task.
-    if TASK_MAP
+    if let Some(task) = TASK_MAP
         .lock()
         .values()
         .find(|x| x.get_task_type() != TaskType::Kernel)
-        .is_none()
     {
-        os_shut_down();
+        TASK_QUEUE.lock().push_back(AsyncTaskItem {
+            task: task.clone(),
+            future: Box::pin(async {}),
+        });
     }
 }

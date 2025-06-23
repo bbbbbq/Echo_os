@@ -3,9 +3,7 @@ use core::{
     pin::Pin,
     task::{Context, Poll, Waker},
 };
-use log::info;
 use timer::current_nsec;
-use alloc::sync::Arc;
 use core::sync::atomic::{AtomicBool, Ordering};
 use spin::Mutex;
 use lazy_static::lazy_static;

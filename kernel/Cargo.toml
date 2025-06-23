@@ -35,5 +35,9 @@ bitflags = { workspace = true }
 async-recursion = { workspace = true }
 timer = { workspace = true }
 struct_define = { workspace = true }
+cfg-if = "1.0.0"
+futures-lite = { version = "1.13.0", default-features = false, features = [
+    "alloc",
+] }
 [target.'cfg(target_arch = "riscv64")'.dependencies]
 riscv = "0.13.0"

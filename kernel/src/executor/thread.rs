@@ -1,49 +1,41 @@
 use super::id_alloc::TaskId;
 use crate::alloc::string::ToString;
-use crate::executor::error::{self, TaskError};
-use crate::executor::executor::{get_cur_usr_task, release_task, spawn};
+use crate::executor::error::TaskError;
+use crate::executor::executor::{release_task, spawn};
 use crate::executor::id_alloc::alloc_tid;
-use crate::executor::task::{AsyncTask, AsyncTaskItem};
-use crate::executor::{self, thread};
-use crate::signal::flages::SigAction;
+use crate::executor::task::AsyncTask;
+use crate::signal::SigProcMask;
+use crate::signal::flages::{SigAction, SignalFlags};
 use crate::signal::list::{REAL_TIME_SIGNAL_NUM, SignalList};
-use crate::signal::{self, SigProcMask};
 use crate::user_handler::entry::user_entry;
-use alloc::borrow::ToOwned;
-use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use arch::flush_tlb;
-use async_recursion::async_recursion;
-use config::target::plat::{
-    PAGE_SIZE, STACK_SIZE, USER_DYN_ADDR, USER_STACK_INIT_SIZE, USER_STACK_TOP,
-};
-use core::cmp::max;
+use config::target::plat::{PAGE_SIZE, USER_DYN_ADDR, USER_STACK_INIT_SIZE, USER_STACK_TOP};
 use core::mem::size_of;
 use core::ops::Mul;
-use core::ptr::slice_from_raw_parts_mut;
 use core::time::Duration;
 use elf_ext::ElfExt;
 use filesystem::fd_table::FdTable;
 use filesystem::file::{File, OpenFlags};
 use filesystem::path::Path;
-use frame::{FRAME_ALLOCATOR, alloc_continues, alloc_frame, dealloc_continues};
-use log::{debug, info};
-use mem::memregion::{MemRegion, MemRegionType};
+use frame::alloc_continues;
+use log::{debug, error, info};
+use mem::memregion::MemRegion;
 use mem::memset::MemSet;
 use mem::pagetable::PageTable;
 use mem::{PhysAddrExt, VirtAddrExt};
-use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange, align_up};
-use page_table_multiarch::{MappingFlags, PageSize};
+use memory_addr::{MemoryAddr, PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange, align_up};
+use page_table_multiarch::MappingFlags;
 use spin::{Mutex, MutexGuard, RwLock};
 use struct_define::elf::elf;
 use trap::trapframe::TrapFrame;
 use trap::trapframe::TrapFrameArgs;
 use xmas_elf::ElfFile;
-use xmas_elf::program::{SegmentData, Type};
+use xmas_elf::program::Type;
 
 #[derive(Debug, Clone)]
 pub struct Shm {
@@ -166,15 +158,26 @@ impl UserTask {
         release_task(self.task_id);
     }
 
+    pub fn exit_with_signal(&self, signal: usize) {
+        self.exit(128 + signal);
+    }
+
     pub fn thread_exit(&self, exit_code: usize) {
-        self.tcb.write().thread_exit_code = Some(exit_code);
-        if self.task_id != self.process_id {
-            self.pcb
-                .lock()
-                .threads
-                .retain(|x| x.upgrade().map_or(false, |x| x.task_id != self.task_id));
+        // 如果是进程的主线程，执行完整的进程退出逻辑，保证向父进程发送 SIGCHLD
+        if self.task_id == self.process_id {
+            self.exit(exit_code);
+            // 进程退出后即可释放资源
             self.release();
+            return;
         }
+
+        // 否则仅标记当前线程退出并从线程列表中移除
+        self.tcb.write().thread_exit_code = Some(exit_code);
+        self.pcb
+            .lock()
+            .threads
+            .retain(|x| x.upgrade().map_or(false, |x| x.task_id != self.task_id));
+        self.release();
     }
 
     pub fn thread_clone(&self) -> Arc<Self> {
@@ -212,13 +215,12 @@ impl UserTask {
         let size = (after_page - curr_page) * PAGE_SIZE;
         let end_paddr = start_paddr + size;
         let mut mem_region = MemRegion::new_mapped(
-            VirtAddr::from(curr_page * PAGE_SIZE),
-            VirtAddr::from(after_page * PAGE_SIZE),
-            start_paddr,
-            end_paddr,
+            VirtAddrRange::new(
+                VirtAddr::from(curr_page * PAGE_SIZE),
+                VirtAddr::from(after_page * PAGE_SIZE),
+            ),
+            PhysAddrRange::new(start_paddr, end_paddr),
             MappingFlags::USER | MappingFlags::WRITE | MappingFlags::READ,
-            "heap_segment".to_string(),
-            MemRegionType::HEAP,
         );
         self.pcb.lock().mem_set.push_region(mem_region.clone());
         let _ = self.page_table.lock().map_region_user(&mut mem_region);
@@ -228,7 +230,7 @@ impl UserTask {
 
     pub fn process_clone(self: Arc<Self>) -> Arc<Self> {
         info!("process_clone");
-        info!("task mem_set {:?}", self.pcb.lock().mem_set);
+        // info!("task mem_set {:?}", self.pcb.lock().mem_set);
 
         let parent_task: Arc<UserTask> = self.clone();
         let work_dir = parent_task.clone().pcb.lock().curr_dir.clone();
@@ -248,14 +250,65 @@ impl UserTask {
         // 显式结束对 new_task 可变借用的生命周期，避免后续移动冲突
         drop(new_tcb_writer);
         let parent_mem_set = pcb.mem_set.clone();
+        let parent_fd_table_len = pcb.fd_table.table.len();
+        let parent_heap = pcb.heap;
+        let parent_curr_dir = pcb.curr_dir.clone();
         drop(pcb);
         for region in parent_mem_set.regions.iter() {
             let mut new_region = region.clone();
             let _ = new_task.page_table.lock().map_region_user(&mut new_region);
-            new_task.page_table.lock().protect_region(&mut new_region, MappingFlags::USER | MappingFlags::READ | MappingFlags::EXECUTE);
+            new_task.page_table.lock().protect_region(
+                &mut new_region,
+                MappingFlags::USER | MappingFlags::READ | MappingFlags::EXECUTE,
+            );
             new_pcb.mem_set.push_region(new_region.clone());
-            parent_task.page_table.lock().protect_region(&mut new_region, MappingFlags::USER | MappingFlags::READ | MappingFlags::EXECUTE);
+            parent_task.page_table.lock().protect_region(
+                &mut new_region,
+                MappingFlags::USER | MappingFlags::READ | MappingFlags::EXECUTE,
+            );
         }
+
+        assert_eq!(
+            new_pcb.mem_set.regions.len(),
+            parent_mem_set.regions.len(),
+            "Parent and child mem_set region count mismatch"
+        );
+        for (i, (child_region, parent_region)) in new_pcb
+            .mem_set
+            .regions
+            .iter()
+            .zip(parent_mem_set.regions.iter())
+            .enumerate()
+        {
+            assert_eq!(
+                child_region.range, parent_region.range,
+                "Region #{} vaddr_range mismatch",
+                i
+            );
+            assert_eq!(
+                child_region.map_flags, parent_region.map_flags,
+                "Region #{} flags mismatch",
+                i
+            );
+        }
+        assert_eq!(new_pcb.heap, parent_heap, "Heap address mismatch");
+        assert_eq!(
+            new_pcb.fd_table.table.len(),
+            parent_fd_table_len,
+            "fd_table length mismatch"
+        );
+        assert_eq!(
+            new_pcb.curr_dir.to_string(),
+            parent_curr_dir.to_string(),
+            "Current directory mismatch"
+        );
+        //比较sp是否一致
+        let parent_sp = parent_task.tcb.read().cx[TrapFrameArgs::SP];
+        let child_sp = new_task.tcb.read().cx[TrapFrameArgs::SP];
+        assert_eq!(parent_sp, child_sp, "Stack pointer mismatch");
+
+        //比较两个pagetable的虚拟地址和物理地址的映射是否一致
+
         drop(new_pcb);
         drop(parent_task);
         new_task
@@ -338,12 +391,58 @@ impl AsyncTask for UserTask {
         super::task::TaskType::User
     }
 
-    fn exit(&self, _exit_code: usize) {
-        unimplemented!()
+    fn exit(&self, exit_code: usize) {
+        // Clear child TID address if specified
+        let exit_signal;
+        {
+            let mut tcb = self.tcb.write();
+            if let Some(uaddr) = tcb.clear_child_tid {
+                if uaddr != 0 {
+                    debug!("write addr: {:#x}", uaddr);
+                    let phys_addr = self
+                        .page_table
+                        .lock()
+                        .translate(VirtAddr::from(uaddr))
+                        .expect("can't find a valid addr")
+                        .0;
+                    unsafe {
+                        *phys_addr.get_mut() = 0usize;
+                    }
+                }
+            }
+            exit_signal = tcb.exit_signal;
+        }
+
+        // Set thread exit code
+        self.pcb.lock().exit_code = Some(exit_code);
+
+        // recycle memory resources if the pcb just used by this thread
+        if Arc::strong_count(&self.pcb) == 1 {
+            let mut pcb = self.pcb.lock();
+            pcb.mem_set.clear();
+            pcb.fd_table.table.clear();
+            pcb.children.clear();
+        }
+
+        if let Some(parent) = self.parent.read().upgrade() {
+            if exit_signal != 0 {
+                parent
+                    .tcb
+                    .write()
+                    .signal
+                    .add_signal(SignalFlags::from_num(exit_signal as usize));
+            } else {
+                parent.tcb.write().signal.add_signal(SignalFlags::SIGCHLD);
+            }
+        } else {
+            self.pcb.lock().children.clear();
+        }
     }
 
     fn exit_code(&self) -> Option<usize> {
-        self.tcb.read().thread_exit_code
+        // Prefer process-level exit_code if set; otherwise fall back to thread_exit_code
+        let pcb_code = self.pcb.lock().exit_code;
+        pcb_code.or(self.tcb.read().thread_exit_code)
     }
 }
 
@@ -374,7 +473,7 @@ pub async fn exec_with_process(
     curr_dir: Path,
     path: String,
     args: Vec<String>,
-    envp: Vec<String>,
+    _envp: Vec<String>,
 ) -> Result<Arc<UserTask>, TaskError> {
     info!("exec_with_process: {}", path);
     let path = curr_dir.join(&path);
@@ -402,7 +501,7 @@ pub async fn exec_with_process(
     // WARRNING: this convert async task to user task.
     let user_task = task.clone();
 
-    let header = elf
+    let _header = elf
         .program_iter()
         .find(|ph| ph.get_type() == Ok(Type::Interp));
 
@@ -478,15 +577,10 @@ pub async fn exec_with_process(
                 PhysAddr::from(frames[0].paddr.as_usize() + ph.offset() as usize - virt_offset);
             let paddr_end = paddr_start + (aligned_end.as_usize() - aligned_start.as_usize());
             let mut mem_region = MemRegion::new_mapped(
-                aligned_start,
-                aligned_end,
-                paddr_start,
-                paddr_end,
+                VirtAddrRange::new(aligned_start, aligned_end),
+                PhysAddrRange::new(paddr_start, paddr_end),
                 mapflages,
-                "elf_segment".to_owned(),
-                MemRegionType::ELF,
             );
-            mem_region.is_mapped = true;
             user_task.pcb.lock().mem_set.push_region(mem_region.clone());
             let _ = user_task.page_table.lock().map_region_user(&mut mem_region);
         });
@@ -584,23 +678,23 @@ pub fn init_task_stack(
 
     let stack_start = USER_STACK_TOP - USER_STACK_INIT_SIZE;
     let stack_end = USER_STACK_TOP;
-    let flags = MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER;
+    // 允许栈页可执行，使信号 tramp 链接可被取指执行
+    let flags = MappingFlags::READ | MappingFlags::WRITE | MappingFlags::EXECUTE | MappingFlags::USER;
 
     let pages = USER_STACK_INIT_SIZE.div_ceil(PAGE_SIZE);
     let frames = alloc_continues(pages);
     let start_paddr = PhysAddr::from(frames[0].paddr.as_usize());
     let end_paddr = start_paddr + USER_STACK_INIT_SIZE;
     let mem_region = MemRegion::new_mapped(
-        VirtAddr::from(stack_start),
-        VirtAddr::from(stack_end),
-        start_paddr,
-        end_paddr,
+        VirtAddrRange::new(VirtAddr::from(stack_start), VirtAddr::from(stack_end)),
+        PhysAddrRange::new(start_paddr, end_paddr),
         flags,
-        "stack".to_string(),
-        MemRegionType::STACK,
     );
     user_task.pcb.lock().mem_set.push_region(mem_region.clone());
-    let _ = user_task.page_table.lock().map_region_user(&mut mem_region.clone());
+    let _ = user_task
+        .page_table
+        .lock()
+        .map_region_user(&mut mem_region.clone());
 
     log::debug!(
         "[task {:?}] entry: {:#x}",

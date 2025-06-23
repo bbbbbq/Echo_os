@@ -61,6 +61,12 @@ impl<T> UserBuf<T> {
         unsafe { &*self.ptr }
     }
 
+    /// Obtain a mutable reference to the value pointed by this UserBuf.
+    #[inline]
+    pub fn get_mut(&self) -> &mut T {
+        unsafe { &mut *self.ptr }
+    }
+
     pub fn write(&self, value: T) {
         unsafe {
             self.ptr.write_volatile(value);

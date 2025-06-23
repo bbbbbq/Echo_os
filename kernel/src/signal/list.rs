@@ -1,6 +1,6 @@
 
 
-use crate::signal::{self, SigProcMask};
+use crate::signal::SigProcMask;
 use crate::signal::flages::SignalFlags;
 
 pub const REAL_TIME_SIGNAL_NUM: usize = 33;
