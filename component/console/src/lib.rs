@@ -1,5 +1,9 @@
 #![no_std]
 
+//! 控制台(console)模块
+//!
+//! 提供基本的输出、日志打印、ANSI颜色支持等功能。
+
 #[cfg(target_arch = "riscv64")]
 pub mod riscv64;
 #[cfg(target_arch = "riscv64")]
@@ -8,6 +12,7 @@ pub use riscv64::*;
 use log::{Level, Log, Metadata, Record};
 use log::{LevelFilter, set_logger, set_max_level};
 
+/// 无标准库环境下的日志实现。
 struct NoStdLogger;
 
 // ANSI color codes
@@ -50,6 +55,13 @@ impl Log for NoStdLogger {
     fn flush(&self) {}
 }
 
+/// 打印一行到控制台，自动换行。
+///
+/// # 用法
+/// ```
+/// println!("Hello, world!");
+/// println!("num = {}", 42);
+/// ```
 #[macro_export]
 macro_rules! println {
     () => ($crate::print!("\n"));
@@ -60,6 +72,13 @@ macro_rules! println {
     })
 }
 
+/// 打印到控制台，不自动换行。
+///
+/// # 用法
+/// ```
+/// print!("Hello");
+/// print!(" world\n");
+/// ```
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => ({
@@ -69,6 +88,9 @@ macro_rules! print {
     })
 }
 
+/// 初始化控制台日志系统。
+///
+/// 设置日志级别并注册日志输出。
 pub fn init() {
     static LOGGER: NoStdLogger = NoStdLogger;
 

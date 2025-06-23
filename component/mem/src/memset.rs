@@ -1,3 +1,7 @@
+//! 内存区域集合(MemSet)模块
+//!
+//! 提供多个内存区域的统一管理、查找、分割、unmap等功能。
+
 use crate::pagetable::PageTable;
 
 
@@ -5,6 +9,7 @@ use super::memregion::MemRegion;
 use alloc::vec::Vec;
 use memory_addr::{VirtAddr, align_up};
 
+/// 内存区域集合。
 #[derive(Clone, Debug)]
 pub struct MemSet {
     pub regions: Vec<MemRegion>,
@@ -21,16 +26,19 @@ impl core::fmt::Display for MemSet {
 }
 
 impl MemSet {
+    /// 创建空的MemSet。
     pub fn new() -> Self {
         Self {
             regions: Vec::new(),
         }
     }
 
+    /// 添加一个内存区域。
     pub fn push_region(&mut self, region: MemRegion) {
         self.regions.push(region);
     }
 
+    /// 获取所有区域的最小起始虚拟地址。
     pub fn get_base(&self) -> usize {
         self.regions
             .iter()
@@ -39,6 +47,7 @@ impl MemSet {
             .unwrap_or(0)
     }
 
+    /// 查找可用的空闲虚拟地址区域。
     pub fn find_free_area(&self, size: usize) -> VirtAddr {
         // a simple version
         let mut sorted_regions = self.regions.clone();
@@ -55,6 +64,7 @@ impl MemSet {
         // VirtAddr::from_usize(0x300000000)
     }
 
+    /// 取消映射并分割指定虚拟地址区间。
     pub fn unmap_region(&mut self, start: usize, size: usize, pagetable: &mut PageTable) {
         if let Some(index) = self.regions.iter().position(|region| {
             region.vaddr_range.start.as_usize() <= start

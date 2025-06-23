@@ -1,11 +1,21 @@
+//! 系统信息(UTSname)结构体定义
+//!
+//! 用于实现uname等系统调用，保存系统标识信息。
 
+/// UTSname 结构体，保存系统名称、节点名、版本等信息。
 #[derive(Debug, Copy, Clone)]   
 pub struct UTSname {
+    /// 操作系统名称
     pub sysname: [u8; 65],
+    /// 网络节点名称
     pub nodename: [u8; 65],
+    /// 操作系统发行版本
     pub release: [u8; 65],
+    /// 操作系统版本
     pub version: [u8; 65],
+    /// 机器硬件名称
     pub machine: [u8; 65],
+    /// 域名
     pub domainname: [u8; 65],
 }
 
@@ -19,7 +29,9 @@ impl core::fmt::Display for UTSname {
         write!(f, "Domain: {}", core::str::from_utf8(&self.domainname).unwrap_or("Invalid UTF-8").trim_end_matches('\0'))
     }
 }
+
 impl UTSname {
+    /// 创建一个空的UTSname结构体。
     pub fn new() -> Self {
         UTSname {
             sysname: [0; 65],

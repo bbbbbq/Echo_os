@@ -13,7 +13,16 @@ use riscv::{
     },
 };
 
+//!
+//! RISC-V 64 架构下的异常与中断处理模块。
+//!
+//! 负责异常分发、TrapFrame 恢复、用户态任务切换等。
+
 // Initialize the trap handler.
+///
+/// 初始化 trap 处理器。
+///
+/// 设置 stvec 为内核 trap 向量入口。
 pub fn init() {
     unsafe {
         let mut stvec = Stvec::from_bits(0);
@@ -27,6 +36,14 @@ pub fn init() {
 }
 
 // 内核中断回调
+///
+/// 内核中断回调。
+///
+/// # 参数
+/// - `context`: 当前 TrapFrame。
+///
+/// # 返回值
+/// 返回异常类型 [`TrapType`]。
 #[unsafe(no_mangle)]
 fn kernel_callback(context: &mut TrapFrame) -> TrapType {
     let scause = scause::read();
@@ -69,6 +86,10 @@ fn kernel_callback(context: &mut TrapFrame) -> TrapType {
     trap_type
 }
 
+/// RISC-V 内核 trap 向量裸函数。
+///
+/// # 安全性
+/// 直接操作底层寄存器和栈。
 #[unsafe(naked)]
 pub unsafe extern "C" fn kernelvec() {
     naked_asm!(
@@ -98,6 +119,13 @@ pub unsafe extern "C" fn kernelvec() {
     )
 }
 
+/// 用户态上下文恢复裸函数。
+///
+/// # 安全性
+/// 直接操作底层寄存器和栈，调用者需保证 context 合法。
+///
+/// # 参数
+/// - `context`: TrapFrame 指针。
 #[unsafe(naked)]
 #[unsafe(no_mangle)]
 extern "C" fn user_restore(context: *mut TrapFrame) {
@@ -144,6 +172,10 @@ extern "C" fn user_restore(context: *mut TrapFrame) {
     }
 }
 
+/// 用户态 trap 向量裸函数。
+///
+/// # 安全性
+/// 直接操作底层寄存器和栈。
 #[unsafe(naked)]
 #[unsafe(no_mangle)]
 #[allow(named_asm_labels)]
@@ -189,13 +221,25 @@ pub unsafe extern "C" fn uservec() {
     );
 }
 
-/// Return EscapeReson related to interrupt type.
+/// 切换到用户态并运行任务。
+///
+/// # 参数
+/// - `context`: 用户态 TrapFrame。
+///
+/// # 返回值
+/// 返回 [`EscapeReason`]，表示任务逃逸原因。
 pub fn run_user_task(context: &mut TrapFrame) -> EscapeReason {
     user_restore(context);
     kernel_callback(context).into()
 }
 
-/// Run user task until interrupt is received.
+/// 持续运行用户任务直到发生中断。
+///
+/// # 参数
+/// - `context`: 用户态 TrapFrame。
+///
+/// # 行为
+/// 循环恢复用户上下文并处理 trap，不返回。
 pub fn run_user_task_forever(context: &mut TrapFrame) -> ! {
     loop {
         user_restore(context);

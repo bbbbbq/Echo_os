@@ -1,3 +1,7 @@
+//! 虚拟文件系统（VFS）核心接口与类型定义
+//!
+//! 提供文件类型、错误类型、Inode与文件系统trait等抽象。
+
 use crate::path::Path;
 use core::marker::Send;
 use core::marker::Sync;
@@ -8,6 +12,8 @@ extern crate alloc;
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+
+/// 文件类型枚举。
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum FileType {
     File,
@@ -20,6 +26,7 @@ pub enum FileType {
     Unknown,
 }
 
+/// 虚拟文件系统错误类型。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VfsError {
     InvalidPath,
@@ -41,10 +48,10 @@ pub enum VfsError {
     Again,
 }
 
-
-
+/// VFS操作结果类型。
 pub type VfsResult<T> = Result<T, VfsError>;
 
+/// 文件属性结构体。
 pub struct FileAttr {
     pub size: usize,
     pub file_type: FileType,
@@ -58,12 +65,14 @@ pub struct FileAttr {
     pub blocks: u32,
 }
 
+/// 目录项结构体。
 pub struct DirEntry {
     pub filename: String,
     pub len: usize,
     pub file_type: FileType,
 }
 
+/// Inode trait，所有文件/目录/设备节点需实现。
 pub trait Inode: DowncastSync + Send + Sync + core::fmt::Debug {
     fn read_at(&self, _offset: usize, _buf: &mut [u8]) -> VfsResult<usize> {
         unimplemented!()
@@ -107,11 +116,9 @@ pub trait Inode: DowncastSync + Send + Sync + core::fmt::Debug {
     fn getattr(&self) -> VfsResult<FileAttr> {
         Err(VfsError::NotSupported)
     }
-
     fn get_type(&self) -> VfsResult<FileType> {
         Err(VfsError::NotSupported)
     }
-
     fn poll(&self, _event: PollEvent) -> VfsResult<PollEvent> {
         Err(VfsError::NotSupported)
     }
@@ -119,12 +126,14 @@ pub trait Inode: DowncastSync + Send + Sync + core::fmt::Debug {
 
 impl_downcast!(Inode);
 
+/// 文件系统类型枚举。
 pub enum FsType {
     Ext4fs,
     Tmpfs,
     DevFs,
 }
 
+/// 文件系统trait，所有文件系统需实现。
 pub trait FileSystem: Send + Sync {
     fn root_inode(&self) -> Option<Arc<dyn Inode>>;
     fn get_type(&self) -> FsType;

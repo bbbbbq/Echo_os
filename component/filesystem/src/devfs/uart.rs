@@ -1,15 +1,22 @@
+//! /dev/uart 设备节点实现
+//!
+//! 提供串口设备的写入输出，兼容Unix语义。
+
 use crate::path::Path;
 use crate::vfs::VfsResult;
 use crate::vfs::{DirEntry, FileAttr, FileSystem, FileType, Inode, VfsError};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use console::print;
+
+/// /dev/uart 设备结构体。
 #[derive(Debug)]
 pub struct UartDev {
     file_type: FileType,
 }
 
 impl UartDev {
+    /// 创建新的 UartDev 实例。
     pub fn new() -> Self {
         Self {
             file_type: FileType::CharDevice,
@@ -18,15 +25,18 @@ impl UartDev {
 }
 
 impl Inode for UartDev {
+    /// 获取设备类型。
     fn get_type(&self) -> VfsResult<FileType> {
         Ok(self.file_type)
     }
 
+    /// 读取未实现。
     fn read_at(&self, _offset: usize, _buf: &mut [u8]) -> VfsResult<usize> {
         // TODO: Implement actual UART read logic.
         // This would typically involve calling the UART driver.
         unimplemented!("UART read_at is not yet implemented")
     }
+    /// 写入数据到串口。
     fn write_at(&self, _offset: usize, buf: &[u8]) -> VfsResult<usize> {
         // Write data to UART by printing each byte
         for &byte in buf {
@@ -64,6 +74,7 @@ impl Inode for UartDev {
         Err(VfsError::NotSupported) // Truncation is not applicable to UART
     }
 
+    /// 刷新操作为无操作。
     fn flush(&self) -> VfsResult<()> {
         // If the UART has output buffers, they could be flushed here.
         // For a simple model, this can be a no-op.
@@ -82,6 +93,7 @@ impl Inode for UartDev {
         Err(VfsError::NotSupported) // UART is not a mount point
     }
 
+    /// 获取文件属性。
     fn getattr(&self) -> VfsResult<FileAttr> {
         Ok(FileAttr {
             size: 0, // UART device size is typically 0

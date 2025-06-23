@@ -7,13 +7,26 @@ use bitflags::bitflags;
 use console::println;
 use core::arch::naked_asm;
 use riscv::register::sstatus;
-// Helper function to create page table entries
+
+//! RISC-V 64 启动相关实现。
+//!
+//! 包含启动页表、MMU初始化、裸机入口等。
+
+/// 创建页表项。
+///
+/// # 参数
+/// * `addr` - 物理地址。
+/// * `flags` - 页表项标志位。
+///
+/// # 返回
+/// 页表项的u64值。
 fn create_pte(addr: usize, flags: u64) -> u64 {
     ((addr >> 12) << 10) as u64 | flags
 }
 
 bitflags! {
     #[derive(Clone, Copy)]
+    /// 页表项标志位。
     pub struct PTEFlags: u64 {
         const V = 1 << 0;
         const R = 1 << 1;
@@ -29,6 +42,10 @@ bitflags! {
 #[unsafe(link_section = ".data.boot_page_table")]
 static mut BOOT_PAGE_TABLE: [u64; 512] = [0; 512];
 
+/// 初始化启动页表。
+///
+/// # Safety
+/// 仅在启动阶段调用。
 unsafe extern "C" fn init_boot_page_table() {
     let boot_pt = unsafe { addr_of_mut!(BOOT_PAGE_TABLE).as_mut().unwrap() };
     let flags = PTEFlags::A | PTEFlags::D | PTEFlags::R | PTEFlags::V | PTEFlags::W | PTEFlags::X;
@@ -42,17 +59,32 @@ unsafe extern "C" fn init_boot_page_table() {
     }
 }
 
+/// 获取启动页表的物理地址。
+///
+/// # Safety
+/// 仅在启动阶段调用。
+///
+/// # 返回
+/// 启动页表的物理地址。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn boot_page_table() -> usize {
     addr_of_mut!(BOOT_PAGE_TABLE) as usize
 }
 
+/// 初始化MMU。
+///
+/// # Safety
+/// 仅在启动阶段调用。
 unsafe extern "C" fn init_mmu() {
     let ptr = &raw mut BOOT_PAGE_TABLE as *mut _ as usize;
     unsafe { satp::set(satp::Mode::Sv39, 0, ptr >> 12) };
     riscv::asm::sfence_vma_all();
 }
 
+/// 裸机启动入口。
+///
+/// # Safety
+/// 仅由硬件启动时调用。
 #[unsafe(naked)]
 #[unsafe(no_mangle)]
 #[unsafe(link_section = ".text.entry")]
@@ -100,6 +132,11 @@ global_asm!(
     "
 );
 
+/// Rust 层启动入口。
+///
+/// # 参数
+/// * `hartid` - 硬件线程编号。
+/// * `dtb` - 设备树地址。
 pub fn rust_entry(hartid: usize, dtb: usize) {
     if dtb != 0xbfe00000 {
         println!("dtb : {:x}", dtb);

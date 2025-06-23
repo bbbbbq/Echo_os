@@ -1,5 +1,9 @@
 #![no_std]
 
+//! ELF 扩展与加载模块
+//!
+//! 提供ELF文件的动态符号、重定位、加载到内存等功能。
+
 extern crate alloc;
 
 use alloc::format;
@@ -23,8 +27,11 @@ use xmas_elf::symbol_table::DynEntry64;
 use xmas_elf::symbol_table::Entry;
 use xmas_elf::{ElfFile, header};
 
+/// ELF 文件扩展trait，提供动态符号表和重定位支持。
 pub trait ElfExt {
+    /// 进行重定位，返回基址。
     fn relocate(&self, base: usize) -> Result<usize, &str>;
+    /// 获取动态符号表。
     fn dynsym(&self) -> Result<&[DynEntry64], &'static str>;
 }
 
@@ -101,21 +108,36 @@ impl ElfExt for ElfFile<'_> {
     }
 }
 
+/// ELF 加载结果结构体。
 #[derive(Clone)]
 pub struct LoadElfReturn {
+    /// ELF文件物理基址
     pub frame_addr: usize,
+    /// 文件大小
     pub file_size: usize,
+    /// 程序头数量
     pub ph_count: usize,
+    /// 程序头表物理地址
     pub ph_addr: usize,
+    /// 程序头表项大小
     pub ph_entry_size: usize,
+    /// 入口点
     pub entry_point: usize,
+    /// 内存集
     pub memset: MemSet,
+    /// 栈区
     pub stack_region: StackRegion,
+    /// 堆底地址
     pub heap_bottom: usize,
+    /// ELF加载基址
     pub base: usize,
+    /// sbss段起始
     pub sbss_start:usize,
+    /// sbss段大小
     pub sbss_size:usize,
+    /// bss段起始
     pub bss_start:usize,
+    /// bss段大小
     pub bss_size:usize,
 }
 
@@ -134,7 +156,12 @@ impl core::fmt::Debug for LoadElfReturn {
     }
 }
 
-// 把elf文件存储到frame内存中，返回elf文件的地址，ph地址，entry_point，memset
+/// 加载ELF文件到frame内存，返回加载信息。
+///
+/// # 参数
+/// * `path` - ELF文件路径。
+/// # 返回
+/// 加载结果结构体。
 pub fn load_elf_frame(path: Path) -> LoadElfReturn {
     debug!("Loading ELF file from path: {:?}", path);
     let file = File::open(&path.to_string(), OpenFlags::O_RDONLY).expect("Failed to open ELF file");

@@ -1,3 +1,7 @@
+//! DevFs 设备文件系统实现
+//!
+//! 提供 /dev 目录的虚拟设备节点支持。
+
 use crate::vfs::{DirEntry, FileAttr, FileSystem, FileType, FsType, Inode, VfsError, VfsResult};
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -8,14 +12,18 @@ use super::null::NullDev;
 use super::uart::UartDev;
 use super::zero::ZeroDev;
 
+/// 设备文件系统主结构体。
 #[derive(Debug)]
 pub struct DevFs {}
 
 impl DevFs {
+    /// 创建新的DevFs实例。
     pub fn new() -> Self {
         Self {}
     }
 }
+
+/// 支持的设备类型。
 #[derive(Debug, Clone, Copy)]
 pub enum DevType {
     Null,
@@ -24,6 +32,7 @@ pub enum DevType {
     Block,
 }
 
+/// DevFs 目录Inode实现。
 #[derive(Debug)]
 pub struct DevFsDirInode
 {
@@ -31,16 +40,19 @@ pub struct DevFsDirInode
 }
 
 impl DevFsDirInode {
+    /// 创建新的目录Inode。
     pub fn new() -> Self {
         DevFsDirInode{
             dev_type:DevType::Null,
         }
     }
 
+    /// 获取设备类型。
     pub fn get_dev_type(&self) -> DevType {
         self.dev_type
     }
 
+    /// 设置设备类型。
     pub fn set_dev_type(&mut self, dev_type: DevType) {
         self.dev_type = dev_type;
     }

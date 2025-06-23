@@ -1,12 +1,19 @@
+//! 路径(Path)模块
+//!
+//! 提供路径字符串的解析、拼接、父目录等操作。
+
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
+
+/// 路径结构体，支持分层管理和操作。
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Path {
     inner: Vec<String>,
 }
 
 impl Path {
+    /// 由字符串创建路径。
     pub fn new(path: String) -> Self {
         let parts: Vec<String> = path
             .split('/')
@@ -16,10 +23,12 @@ impl Path {
         Self { inner: parts }
     }
 
+    /// 获取路径各层级的字符串数组。
     pub fn get_inner(&self) -> Vec<String> {
         self.inner.clone()
     }
 
+    /// 获取路径最后一级名称。
     pub fn get_name(&self) -> String {
         if self.inner.is_empty() {
             "".to_string()
@@ -28,12 +37,14 @@ impl Path {
         }
     }
 
+    /// 获取父目录路径字符串。
     pub fn parent(&self) -> String {
         let mut inner = self.inner.clone();
         inner.pop();
         Path { inner }.to_string()
     }
     
+    /// 转为字符串（绝对路径）。
     pub fn to_string(&self) -> String {
         if self.inner.is_empty() {
             return "/".to_string();
@@ -43,12 +54,14 @@ impl Path {
         s
     }
 
+    /// 拼接子路径。
     pub fn join(&self, path: &str) -> Path {
         let mut inner = self.inner.clone();
         inner.push(path.to_string());
         Path { inner }
     }
 
+    /// 是否为当前目录。
     pub fn is_current(&self) -> bool {
         self.inner.len() == 1 && self.inner[0] == "."
     }

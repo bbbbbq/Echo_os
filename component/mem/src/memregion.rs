@@ -1,3 +1,7 @@
+//! 内存区域(MemRegion)管理模块
+//!
+//! 提供内存区域类型、属性、分割、映射等功能。
+
 use alloc::string::String;
 use memory_addr::{MemoryAddr, PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange};
 use page_table_multiarch::MappingFlags;
@@ -5,6 +9,7 @@ use super::pagetable::PageTable;
 use alloc::vec::Vec;
 use frame::FrameTracer;
 
+/// 内存区域类型。
 #[derive(Debug,Clone, Copy)]
 pub enum MemRegionType {
     Text,
@@ -17,7 +22,7 @@ pub enum MemRegionType {
     MMAP,
 }
 
-/// Memory region
+/// 内存区域结构体。
 #[derive(Clone)]
 pub struct MemRegion {
     pub vaddr_range: VirtAddrRange,
@@ -59,6 +64,7 @@ impl core::fmt::Debug for MemRegion {
 }
 
 impl MemRegion {
+    /// 创建已映射的内存区域。
     pub fn new_mapped(
         start_vaddr: VirtAddr,
         end_vaddr: VirtAddr,
@@ -90,6 +96,7 @@ impl MemRegion {
         }
     }
 
+    /// 创建匿名（无物理地址）内存区域。
     pub fn new_anonymous(
         start_vaddr: VirtAddr,
         end_vaddr: VirtAddr,
@@ -110,10 +117,12 @@ impl MemRegion {
             frames: None,
         }
     }
+    /// 将区域映射到页表。
     pub fn map_user_frame(&mut self, page_table: &mut PageTable) {
         page_table.map_region_user_frame(self);
     }
 
+    /// 按虚拟地址分割为两段。
     pub fn sub_region(&self, start_vaddr: usize, size:usize) -> (Self, Self)
     {
         let end_vaddr = start_vaddr + size;

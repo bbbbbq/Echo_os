@@ -6,9 +6,17 @@ use core::{
 use polyhal::gdt::GdtStruct;
 use x86::bits64::rflags::RFlags;
 
+//!
+//! x86_64 架构下的 TrapFrame 实现。
+//!
+//! 提供异常/中断发生时的寄存器保存结构及相关操作。
+
 #[repr(C, align(16))]
 #[derive(Clone)]
 pub struct FxsaveArea {
+    /// FXSAVE 区域结构体。
+    ///
+    /// 用于保存 x86_64 浮点和 SIMD 状态。
     pub fcw: u16,
     pub fsw: u16,
     pub ftw: u16,
@@ -23,11 +31,13 @@ pub struct FxsaveArea {
 }
 
 impl FxsaveArea {
+    /// 保存当前浮点/SIMD 状态到 FxsaveArea。
     #[inline]
     pub(crate) fn save(&mut self) {
         unsafe { core::arch::x86_64::_fxsave64(self as *mut _ as *mut u8) }
     }
 
+    /// 恢复 FxsaveArea 中保存的浮点/SIMD 状态。
     #[inline]
     pub(crate) fn restore(&self) {
         unsafe { core::arch::x86_64::_fxrstor64(self as *const _ as *const u8) }
@@ -50,8 +60,9 @@ impl Debug for FxsaveArea {
     }
 }
 
-/// Saved registers when a trap (interrupt or exception) occurs.
-/// This is need be align 16, because tss trap ptr should be align 16? I think it is.
+/// TrapFrame 结构体，表示一次异常/中断发生时保存的寄存器状态。
+///
+/// 需 16 字节对齐。
 #[allow(missing_docs)]
 #[repr(C, align(16))]
 #[derive(Debug, Default, Clone)]
@@ -91,7 +102,7 @@ pub struct TrapFrame {
 }
 
 impl TrapFrame {
-    // 创建上下文信息
+    /// 创建新的 TrapFrame，上下文初始化。
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -104,17 +115,19 @@ impl TrapFrame {
 }
 
 impl TrapFrame {
+    /// 获取系统调用参数（前 6 个）。
     #[inline]
     pub fn args(&self) -> [usize; 6] {
         [self.rdi, self.rsi, self.rdx, self.r10, self.r8, self.r9]
     }
 
+    /// 系统调用返回时（x86_64 无需推进 PC）。
     #[inline]
     pub fn syscall_ok(&mut self) {
         // self.sepc += 4;
     }
 
-    /// Check if the trapframe was from user.
+    /// 判断 TrapFrame 是否来自用户态。
     #[inline]
     pub fn from_user(&self) -> bool {
         self.cs == GdtStruct::UCODE64_SELECTOR.0 as _
@@ -124,6 +137,7 @@ impl TrapFrame {
 impl Index<TrapFrameArgs> for TrapFrame {
     type Output = usize;
 
+    /// 按 TrapFrameArgs 枚举索引 TrapFrame 字段。
     fn index(&self, index: TrapFrameArgs) -> &Self::Output {
         match index {
             TrapFrameArgs::SEPC => &self.rip,
@@ -143,6 +157,7 @@ impl Index<TrapFrameArgs> for TrapFrame {
 }
 
 impl IndexMut<TrapFrameArgs> for TrapFrame {
+    /// 按 TrapFrameArgs 枚举可变索引 TrapFrame 字段。
     fn index_mut(&mut self, index: TrapFrameArgs) -> &mut Self::Output {
         match index {
             TrapFrameArgs::SEPC => &mut self.rip,

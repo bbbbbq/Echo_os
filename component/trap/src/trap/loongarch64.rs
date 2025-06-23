@@ -12,6 +12,15 @@ use loongArch64::register::{
 use polyhal::irq::TIMER_IRQ;
 use unaligned::emulate_load_store_insn;
 
+//!
+//! LoongArch64 架构下的异常与中断处理模块。
+//!
+//! 负责异常分发、TrapFrame 恢复、TLB 初始化、用户态任务切换等。
+
+/// 用户态异常向量入口裸函数。
+///
+/// # 安全性
+/// 直接操作底层寄存器和栈，调用者需保证上下文正确。
 #[naked]
 pub unsafe extern "C" fn user_vec() {
     naked_asm!(
@@ -41,6 +50,13 @@ pub unsafe extern "C" fn user_vec() {
     );
 }
 
+/// 用户态上下文恢复裸函数。
+///
+/// # 安全性
+/// 直接操作底层寄存器和栈，调用者需保证 context 合法。
+///
+/// # 参数
+/// - `context`: TrapFrame 指针。
 #[naked]
 #[no_mangle]
 pub extern "C" fn user_restore(context: *mut TrapFrame) {
@@ -75,6 +91,7 @@ pub extern "C" fn user_restore(context: *mut TrapFrame) {
     }
 }
 
+/// 使能中断。
 #[allow(dead_code)]
 #[inline(always)]
 pub fn enable_irq() {
@@ -82,17 +99,29 @@ pub fn enable_irq() {
     prmd::set_pie(true);
 }
 
+/// 禁用中断。
 #[inline(always)]
 pub fn disable_irq() {
     // crmd::set_ie(false);
     prmd::set_pie(false);
 }
 
+/// 切换到用户态并运行任务。
+///
+/// # 参数
+/// - `cx`: 用户态 TrapFrame。
+///
+/// # 返回值
+/// 返回 [`EscapeReason`]，表示任务逃逸原因。
 pub fn run_user_task(cx: &mut TrapFrame) -> EscapeReason {
     user_restore(cx);
     loongarch64_trap_handler(cx).into()
 }
 
+/// 异常向量基址裸函数。
+///
+/// # 安全性
+/// 直接操作底层寄存器和栈。
 #[naked]
 pub unsafe extern "C" fn trap_vector_base() {
     naked_asm!(
@@ -125,6 +154,10 @@ pub unsafe extern "C" fn trap_vector_base() {
     );
 }
 
+/// TLB refill 处理裸函数。
+///
+/// # 安全性
+/// 直接操作底层寄存器和 TLB。
 #[naked]
 pub unsafe extern "C" fn tlb_fill() {
     naked_asm!(
@@ -143,13 +176,21 @@ pub unsafe extern "C" fn tlb_fill() {
     );
 }
 
+/// 4KB 页大小的页表项类型。
 pub const PS_4K: usize = 0x0c;
+/// 16KB 页大小的页表项类型（未用）。
 pub const _PS_16K: usize = 0x0e;
+/// 2MB 页大小的页表项类型（未用）。
 pub const _PS_2M: usize = 0x15;
+/// 1GB 页大小的页表项类型（未用）。
 pub const _PS_1G: usize = 0x1e;
-
+/// 页大小偏移量（12 表示 4KB）。
 pub const PAGE_SIZE_SHIFT: usize = 12;
 
+/// TLB 初始化。
+///
+/// # 参数
+/// - `tlbrentry`: TLB refill 入口地址。
 pub fn tlb_init(tlbrentry: usize) {
     // // setup PWCTL
     // unsafe {
@@ -181,6 +222,7 @@ pub fn tlb_init(tlbrentry: usize) {
     // pgdh::set_base(kernel_pgd_base);
 }
 
+/// 初始化异常处理。
 #[inline]
 pub fn init() {
     tlb_init(tlb_fill as usize);
@@ -188,6 +230,13 @@ pub fn init() {
     eentry::set_eentry(trap_vector_base as usize);
 }
 
+/// LoongArch64 架构下 trap 处理主入口。
+///
+/// # 参数
+/// - `tf`: 当前 TrapFrame。
+///
+/// # 返回值
+/// 返回异常类型 [`TrapType`]。
 fn loongarch64_trap_handler(tf: &mut TrapFrame) -> TrapType {
     let estat = estat::read();
     let trap_type = match estat.cause() {

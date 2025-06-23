@@ -7,13 +7,22 @@ use riscv::register::sstatus::{self, SPP, Sstatus};
 
 use super::TrapFrameArgs;
 
+//!
+//! RISC-V 64 架构下的 TrapFrame 实现。
+//!
+//! 提供异常/中断发生时的寄存器保存结构及相关操作。
+
 #[repr(C)]
 #[derive(Clone)]
-// 上下文
+/// TrapFrame 结构体，表示一次异常/中断发生时保存的寄存器状态。
 pub struct TrapFrame {
-    pub x: [usize; 32], // 32 个通用寄存器
+    /// 32 个通用寄存器
+    pub x: [usize; 32],
+    /// sstatus 寄存器
     pub sstatus: Sstatus,
+    /// 异常程序计数器
     pub sepc: usize,
+    /// 浮点扩展寄存器
     pub fsx: [usize; 2],
 }
 
@@ -59,7 +68,7 @@ impl Debug for TrapFrame {
 }
 
 impl TrapFrame {
-    // 创建上下文信息
+    /// 创建新的 TrapFrame，上下文初始化。
     #[inline]
     pub fn new() -> Self {
         TrapFrame {
@@ -70,36 +79,42 @@ impl TrapFrame {
         }
     }
 
+    /// 获取系统调用参数（前 6 个）。
     #[inline]
     pub fn args(&self) -> [usize; 6] {
         self.x[10..16].try_into().expect("args slice force convert")
     }
 
-    /// Check if the trapframe was from user.
+    /// 判断 TrapFrame 是否来自用户态。
     #[inline]
     pub fn from_user(&self) -> bool {
         self.sstatus.spp() == SPP::User
     }
 
+    /// 系统调用返回时，推进 sepc。
     #[inline]
     pub fn syscall_ok(&mut self) {
         self.sepc += 4;
     }
 
+    /// 获取栈指针。
     pub fn get_sp(&self) -> usize {
         self.x[2]
     }
 
+    /// 设置栈指针。
     pub fn set_sp(&mut self, sp: usize)
     {
         self.x[2] = sp;
     }
 
+    /// 设置异常程序计数器。
     pub fn set_sepc(&mut self, sepc: usize)
     {
         self.sepc = sepc;
     }
 
+    /// 获取系统调用号。
     pub fn get_sysno(&self) -> usize
     {
         self.x[17]
@@ -109,6 +124,7 @@ impl TrapFrame {
 impl Index<TrapFrameArgs> for TrapFrame {
     type Output = usize;
 
+    /// 按 TrapFrameArgs 枚举索引 TrapFrame 字段。
     fn index(&self, index: TrapFrameArgs) -> &Self::Output {
         match index {
             TrapFrameArgs::SEPC => &self.sepc,
@@ -128,6 +144,7 @@ impl Index<TrapFrameArgs> for TrapFrame {
 }
 
 impl IndexMut<TrapFrameArgs> for TrapFrame {
+    /// 按 TrapFrameArgs 枚举可变索引 TrapFrame 字段。
     fn index_mut(&mut self, index: TrapFrameArgs) -> &mut Self::Output {
         match index {
             TrapFrameArgs::SEPC => &mut self.sepc,

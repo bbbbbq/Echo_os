@@ -1,5 +1,9 @@
 #![no_std]
 
+//! 文件系统管理模块
+//!
+//! 提供文件系统初始化、挂载、根文件系统管理等功能。
+
 extern crate alloc;
 
 pub mod devfs;
@@ -20,15 +24,20 @@ use alloc::sync::Arc;
 use lazy_static::lazy_static;
 use spin::Mutex;
 lazy_static! {
+    /// 根文件系统全局变量。
     pub static ref ROOT_FS: Mutex<Option<Arc<Ext4FileSystemWrapper>>> = Mutex::new(None);
 }
 
+/// 初始化文件系统。
+///
+/// 挂载ext4和devfs。
 pub fn init_fs() {
     log::info!("Starting filesystem initialization");
     mount_ext4();
     mount_devfs();
 }
 
+/// 挂载ext4文件系统为根文件系统。
 pub fn mount_ext4() {
     match crate::plug::lwext4::Ext4FileSystemWrapper::new(0) {
         Ok(ext4_fs) => {
@@ -43,6 +52,7 @@ pub fn mount_ext4() {
     }
 }
 
+/// 挂载devfs到/dev目录。
 pub fn mount_devfs() {
     log::info!("Attempting to mount DevFs at /dev...");
     let dev_filesystem = Arc::new(DevFs::new());

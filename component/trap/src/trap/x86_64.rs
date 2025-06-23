@@ -27,8 +27,15 @@ use x86_64::{
 
 global_asm!(include_str!("x86_64/trap.S"));
 
+//!
+//! x86_64 架构下的异常与中断处理模块。
+//!
+//! 负责异常分发、TrapFrame 恢复、用户态任务切换、系统调用初始化等。
+
+/// 页错误标志位。
+///
+/// 参考：https://wiki.osdev.org/Exceptions#Page_Fault
 bitflags! {
-    // https://wiki.osdev.org/Exceptions#Page_Fault
     #[derive(Debug)]
     struct PageFaultFlags: u32 {
         const P = 1;
@@ -46,7 +53,13 @@ bitflags! {
 #[no_mangle]
 static KERNEL_SP: usize = 0;
 
-// 内核中断回调
+/// 内核中断回调。
+///
+/// # 参数
+/// - `context`: 当前 TrapFrame。
+///
+/// # 行为
+/// 根据 vector 号分发异常类型，调用架构无关的 trap 处理。
 #[no_mangle]
 fn kernel_callback(context: &mut TrapFrame) {
     let trap_type = match context.vector as u8 {
@@ -88,13 +101,10 @@ fn kernel_callback(context: &mut TrapFrame) {
     unsafe { super::_interrupt_for_arch(context, trap_type, 0) };
 }
 
-/// Kernel Trap Entry
+/// 内核 trap 入口裸函数。
 ///
-/// This function is called when a kernel process is interrupted.
-///
-/// # Safety
-///
-/// This function is unsafe because it performs low-level operations
+/// # 安全性
+/// 直接操作底层寄存器和栈。
 #[naked]
 #[no_mangle]
 pub unsafe extern "C" fn kernelvec() {
@@ -131,15 +141,10 @@ pub unsafe extern "C" fn kernelvec() {
     )
 }
 
-/// User Trap Entry
+/// 用户态 trap 入口裸函数。
 ///
-/// This function is called when a user process is interrupted.
-/// It saves the user context and switches to kernel mode.
-///
-/// # Safety
-///
-/// This function is unsafe because it performs low-level operations
-/// that can lead to undefined behavior if not used correctly.
+/// # 安全性
+/// 直接操作底层寄存器和栈。
 #[naked]
 #[no_mangle]
 pub unsafe extern "C" fn uservec() {
@@ -175,6 +180,13 @@ pub unsafe extern "C" fn uservec() {
     );
 }
 
+/// 用户态上下文恢复裸函数。
+///
+/// # 安全性
+/// 直接操作底层寄存器和栈，调用者需保证 context 合法。
+///
+/// # 参数
+/// - `context`: TrapFrame 指针。
 #[naked]
 #[no_mangle]
 pub extern "C" fn user_restore(context: *mut TrapFrame) {
@@ -242,6 +254,10 @@ pub extern "C" fn user_restore(context: *mut TrapFrame) {
     }
 }
 
+/// 系统调用返回裸函数。
+///
+/// # 安全性
+/// 直接操作底层寄存器和栈。
 #[naked]
 unsafe extern "C" fn sysretq() {
     naked_asm!(
@@ -257,6 +273,9 @@ unsafe extern "C" fn sysretq() {
     )
 }
 
+/// 初始化系统调用相关寄存器。
+///
+/// 设置 LSTAR、STAR、SFMASK、EFER、KERNEL_GS_BASE 等。
 pub fn init_syscall() {
     LStar::write(VirtAddr::new(syscall_entry as usize as _));
     Star::write(
@@ -281,6 +300,9 @@ pub fn init_syscall() {
     KernelGsBase::write(VirtAddr::new(0));
 }
 
+/// 初始化 x86_64 trap 相关组件。
+///
+/// 包括 GDT、IDT、APIC、系统调用等。
 pub fn init() {
     // Init PerCPU Information.
     polyhal::gdt::init();
@@ -290,6 +312,10 @@ pub fn init() {
     init_syscall();
 }
 
+/// 系统调用入口裸函数。
+///
+/// # 安全性
+/// 直接操作底层寄存器和栈。
 #[naked]
 unsafe extern "C" fn syscall_entry() {
     naked_asm!(
@@ -344,7 +370,13 @@ unsafe extern "C" fn syscall_entry() {
     )
 }
 
-/// Return Some(()) if it was interrupt by syscall, otherwise None.
+/// 切换到用户态并运行任务。
+///
+/// # 参数
+/// - `context`: 用户态 TrapFrame。
+///
+/// # 返回值
+/// 返回 [`EscapeReason`]，表示任务逃逸原因。
 pub fn run_user_task(context: &mut TrapFrame) -> EscapeReason {
     // TODO: set tss kernel sp just once, before task run.
     let cx_general_top =

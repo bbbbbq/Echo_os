@@ -3,13 +3,24 @@ use crate::trapframe::TrapFrame;
 use core::arch::naked_asm;
 use loongArch64::register::badv;
 
+//! LoongArch64 架构下未对齐内存访问的模拟与处理模块。
+//!
+//! 该模块用于捕获和模拟未对齐的 load/store 指令，保证内存访问的正确性。
+
 pub const LDH_OP: u32 = 0xa1;
+/// 半字（16 位）无符号加载指令操作码。
 pub const LDHU_OP: u32 = 0xa9;
+/// 字（32 位）有符号加载指令操作码。
 pub const LDW_OP: u32 = 0xa2;
+/// 字（32 位）无符号加载指令操作码。
 pub const LDWU_OP: u32 = 0xaa;
+/// 双字（64 位）加载指令操作码。
 pub const LDD_OP: u32 = 0xa3;
+/// 半字（16 位）存储指令操作码。
 pub const STH_OP: u32 = 0xa5;
+/// 字（32 位）存储指令操作码。
 pub const STW_OP: u32 = 0xa6;
+/// 双字（64 位）存储指令操作码。
 pub const STD_OP: u32 = 0xa7;
 
 pub const LDPTRW_OP: u32 = 0x24;
@@ -36,6 +47,19 @@ pub const FSTXD_OP: u32 = 0x7078;
 pub const FLDXS_OP: u32 = 0x7060;
 pub const FLDXD_OP: u32 = 0x7068;
 
+/// 未对齐内存读取的裸函数实现。
+///
+/// # 安全性
+/// 该函数为裸函数，直接操作内存和寄存器，调用时需确保参数合法。
+///
+/// # 参数
+/// - `addr`: 读取的内存地址。
+/// - `value`: 读取结果的输出指针。
+/// - `n`: 读取的字节数。
+/// - `symbol`: 读取类型标志。
+///
+/// # 返回值
+/// 返回 0 表示成功，-1 表示失败。
 #[allow(binary_asm_labels)]
 #[naked]
 unsafe extern "C" fn unaligned_read(addr: u64, value: &mut u64, n: u64, symbol: u32) -> i32 {
@@ -77,6 +101,18 @@ unsafe extern "C" fn unaligned_read(addr: u64, value: &mut u64, n: u64, symbol: 
     )
 }
 
+/// 未对齐内存写入的裸函数实现。
+///
+/// # 安全性
+/// 该函数为裸函数，直接操作内存和寄存器，调用时需确保参数合法。
+///
+/// # 参数
+/// - `_addr`: 写入的内存地址。
+/// - `_value`: 写入的值。
+/// - `_n`: 写入的字节数。
+///
+/// # 返回值
+/// 返回 0 表示成功，-1 表示失败。
 #[allow(binary_asm_labels)]
 #[naked]
 unsafe extern "C" fn unaligned_write(_addr: u64, _value: u64, _n: u64) -> i32 {
@@ -104,6 +140,15 @@ unsafe extern "C" fn unaligned_write(_addr: u64, _value: u64, _n: u64) -> i32 {
     )
 }
 
+/// 使用 volatile 写法写入指定字节数。
+///
+/// # 安全性
+/// 直接操作裸指针，调用者需保证地址和长度合法。
+///
+/// # 参数
+/// - `addr`: 写入的内存地址。
+/// - `value`: 写入的值。
+/// - `n`: 写入的字节数。
 #[inline]
 pub unsafe fn write_bytes(addr: u64, value: u64, n: usize) {
     let ptr = addr as *mut u8;
@@ -113,7 +158,17 @@ pub unsafe fn write_bytes(addr: u64, value: u64, n: usize) {
     }
 }
 
-#[allow(unused_assignments)]
+/// 模拟未对齐的 load/store 指令。
+///
+/// # 安全性
+/// 直接操作 TrapFrame 和底层内存，调用者需保证上下文正确。
+///
+/// # 参数
+/// - `pt_regs`: 当前异常发生时的 TrapFrame。
+///
+/// # 行为
+/// 根据指令类型，调用相应的未对齐读写实现，并更新 TrapFrame。
+/// 若遇到不支持的指令或地址错误会 panic。
 pub unsafe fn emulate_load_store_insn(pt_regs: &mut TrapFrame) {
     let la_inst: u32;
     let addr: u64;

@@ -1,11 +1,19 @@
 #![no_std]
 
+//! 位图(bitmap)模块
+//!
+//! 提供高效的位操作与管理，常用于内存分配、资源跟踪等场景。
+
 extern crate alloc;
 
 use alloc::vec::Vec;
 use core::ops::{BitAnd, BitOr, BitXor, Not};
 
-/// A bitmap for efficiently tracking bits
+/// 位图结构体，用于高效管理和操作大量二进制位。
+///
+/// # 字段
+/// * `bits` - 以u64为单位的位存储向量。
+/// * `size` - 位图的总位数。
 pub struct Bitmap {
     /// The underlying storage as a vector of u64 words
     bits: Vec<u64>,
@@ -14,7 +22,12 @@ pub struct Bitmap {
 }
 
 impl Bitmap {
-    /// Create a new bitmap with the specified number of bits, all set to 0
+    /// 创建一个指定大小、所有位为0的位图。
+    ///
+    /// # 参数
+    /// * `size` - 位图的总位数。
+    /// # 返回
+    /// 新的Bitmap实例。
     pub fn new(size: usize) -> Self {
         let word_count = (size + 63) / 64; // Round up to nearest multiple of 64
         let mut bits = Vec::with_capacity(word_count);
@@ -23,7 +36,12 @@ impl Bitmap {
         Self { bits, size }
     }
 
-    /// Create a new bitmap with all bits set to 1
+    /// 创建一个所有位为1的位图。
+    ///
+    /// # 参数
+    /// * `size` - 位图的总位数。
+    /// # 返回
+    /// 新的Bitmap实例。
     pub fn new_filled(size: usize) -> Self {
         let word_count = (size + 63) / 64;
         let mut bits = Vec::with_capacity(word_count);
@@ -39,19 +57,24 @@ impl Bitmap {
         Self { bits, size }
     }
 
-    /// Get the total number of bits in the bitmap
+    /// 获取位图的总位数。
     #[inline]
     pub fn len(&self) -> usize {
         self.size
     }
 
-    /// Check if the bitmap is empty
+    /// 判断位图是否为空。
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.size == 0
     }
 
-    /// Get the value of a specific bit
+    /// 获取指定下标的位。
+    ///
+    /// # 参数
+    /// * `index` - 位的下标。
+    /// # 返回
+    /// `Some(true)`表示该位为1，`Some(false)`为0，越界返回None。
     pub fn get(&self, index: usize) -> Option<bool> {
         if index >= self.size {
             return None;
@@ -63,7 +86,12 @@ impl Bitmap {
         Some((self.bits[word_idx] & (1u64 << bit_idx)) != 0)
     }
 
-    /// Set a specific bit to 1
+    /// 将指定下标的位设置为1。
+    ///
+    /// # 参数
+    /// * `index` - 位的下标。
+    /// # 返回
+    /// 设置成功返回true，越界返回false。
     pub fn set(&mut self, index: usize) -> bool {
         if index >= self.size {
             return false;
@@ -76,7 +104,12 @@ impl Bitmap {
         true
     }
 
-    /// Clear a specific bit to 0
+    /// 将指定下标的位清零。
+    ///
+    /// # 参数
+    /// * `index` - 位的下标。
+    /// # 返回
+    /// 清零成功返回true，越界返回false。
     pub fn clear(&mut self, index: usize) -> bool {
         if index >= self.size {
             return false;
@@ -89,7 +122,12 @@ impl Bitmap {
         true
     }
 
-    /// Toggle a specific bit
+    /// 翻转指定下标的位。
+    ///
+    /// # 参数
+    /// * `index` - 位的下标。
+    /// # 返回
+    /// 翻转成功返回true，越界返回false。
     pub fn toggle(&mut self, index: usize) -> bool {
         if index >= self.size {
             return false;
@@ -102,7 +140,7 @@ impl Bitmap {
         true
     }
 
-    /// Check if all bits are set to 1
+    /// 判断所有位是否都为1。
     pub fn all(&self) -> bool {
         if self.is_empty() {
             return true;
@@ -130,7 +168,7 @@ impl Bitmap {
         true
     }
 
-    /// Check if any bit is set to 1
+    /// 判断是否存在至少一位为1。
     pub fn any(&self) -> bool {
         if self.is_empty() {
             return false;
@@ -145,7 +183,7 @@ impl Bitmap {
         false
     }
 
-    /// Count the number of bits set to 1
+    /// 统计所有为1的位数。
     pub fn count_ones(&self) -> usize {
         let mut count = 0;
 
@@ -156,12 +194,15 @@ impl Bitmap {
         count
     }
 
-    /// Count the number of bits set to 0
+    /// 统计所有为0的位数。
     pub fn count_zeros(&self) -> usize {
         self.size - self.count_ones()
     }
 
-    /// Find the index of the first bit set to 1, or None if no bits are set
+    /// 查找第一个为1的位的下标。
+    ///
+    /// # 返回
+    /// 若存在，返回Some(index)，否则返回None。
     pub fn first_set(&self) -> Option<usize> {
         for (word_idx, &word) in self.bits.iter().enumerate() {
             if word != 0 {
@@ -177,7 +218,10 @@ impl Bitmap {
         None
     }
 
-    /// Find the index of the first bit set to 0, or None if all bits are set
+    /// 查找第一个为0的位的下标。
+    ///
+    /// # 返回
+    /// 若存在，返回Some(index)，否则返回None。
     pub fn first_clear(&self) -> Option<usize> {
         for (word_idx, &word) in self.bits.iter().enumerate() {
             if word != u64::MAX {
@@ -193,7 +237,7 @@ impl Bitmap {
         None
     }
 
-    /// Set all bits to 1
+    /// 将所有位设置为1。
     pub fn set_all(&mut self) {
         for word in &mut self.bits {
             *word = u64::MAX;
@@ -207,14 +251,17 @@ impl Bitmap {
         }
     }
 
-    /// Clear all bits to 0
+    /// 将所有位清零。
     pub fn clear_all(&mut self) {
         for word in &mut self.bits {
             *word = 0;
         }
     }
 
-    /// Resize the bitmap to the new size
+    /// 调整位图大小。
+    ///
+    /// # 参数
+    /// * `new_size` - 新的位图大小。
     pub fn resize(&mut self, new_size: usize) {
         let new_word_count = (new_size + 63) / 64;
 
@@ -237,8 +284,12 @@ impl Bitmap {
         self.size = new_size;
     }
 
-    /// Perform a bitwise AND operation with another bitmap
-    /// Returns a new bitmap with the result
+    /// 位与操作。
+    ///
+    /// # 参数
+    /// * `other` - 另一个位图。
+    /// # 返回
+    /// 新的位图，结果为self & other。
     pub fn bitand(&self, other: &Self) -> Self {
         let mut result = self.clone();
         let min_len = core::cmp::min(self.bits.len(), other.bits.len());
@@ -250,8 +301,12 @@ impl Bitmap {
         result
     }
 
-    /// Perform a bitwise OR operation with another bitmap
-    /// Returns a new bitmap with the result
+    /// 位或操作。
+    ///
+    /// # 参数
+    /// * `other` - 另一个位图。
+    /// # 返回
+    /// 新的位图，结果为self | other。
     pub fn bitor(&self, other: &Self) -> Self {
         let mut result = self.clone();
         let min_len = core::cmp::min(self.bits.len(), other.bits.len());
@@ -263,8 +318,12 @@ impl Bitmap {
         result
     }
 
-    /// Perform a bitwise XOR operation with another bitmap
-    /// Returns a new bitmap with the result
+    /// 位异或操作。
+    ///
+    /// # 参数
+    /// * `other` - 另一个位图。
+    /// # 返回
+    /// 新的位图，结果为self ^ other。
     pub fn bitxor(&self, other: &Self) -> Self {
         let mut result = self.clone();
         let min_len = core::cmp::min(self.bits.len(), other.bits.len());
@@ -276,8 +335,10 @@ impl Bitmap {
         result
     }
 
-    /// Perform a bitwise NOT operation
-    /// Returns a new bitmap with the result
+    /// 位取反操作。
+    ///
+    /// # 返回
+    /// 新的位图，结果为!self。
     pub fn bitnot(&self) -> Self {
         let mut result = self.clone();
 
@@ -297,9 +358,10 @@ impl Bitmap {
     }
 }
 
-// Implementation of common traits
+// trait实现
 
 impl Clone for Bitmap {
+    /// 克隆位图。
     fn clone(&self) -> Self {
         Self {
             bits: self.bits.clone(),
@@ -310,7 +372,7 @@ impl Clone for Bitmap {
 
 impl BitAnd for &Bitmap {
     type Output = Bitmap;
-
+    /// 按位与操作符实现。
     fn bitand(self, other: &Bitmap) -> Bitmap {
         self.bitand(other)
     }
@@ -318,7 +380,7 @@ impl BitAnd for &Bitmap {
 
 impl BitOr for &Bitmap {
     type Output = Bitmap;
-
+    /// 按位或操作符实现。
     fn bitor(self, other: &Bitmap) -> Bitmap {
         self.bitor(other)
     }
@@ -326,7 +388,7 @@ impl BitOr for &Bitmap {
 
 impl BitXor for &Bitmap {
     type Output = Bitmap;
-
+    /// 按位异或操作符实现。
     fn bitxor(self, other: &Bitmap) -> Bitmap {
         self.bitxor(other)
     }
@@ -334,7 +396,7 @@ impl BitXor for &Bitmap {
 
 impl Not for &Bitmap {
     type Output = Bitmap;
-
+    /// 按位取反操作符实现。
     fn not(self) -> Bitmap {
         self.bitnot()
     }

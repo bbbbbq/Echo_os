@@ -2,21 +2,25 @@ use core::ops::{Index, IndexMut};
 
 use super::TrapFrameArgs;
 
-/// Saved registers when a trap (interrupt or exception) occurs.
+///
+/// LoongArch64 架构下的 TrapFrame 实现。
+///
+/// 提供异常/中断发生时的寄存器保存结构及相关操作。
+/// TrapFrame 结构体，表示一次异常/中断发生时保存的寄存器状态。
 #[allow(missing_docs)]
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy)]
 pub struct TrapFrame {
-    /// General Registers
+    /// 通用寄存器 x0~x31
     pub regs: [usize; 32],
-    /// Pre-exception Mode information
+    /// 异常前的模式信息（PRMD）
     pub prmd: usize,
-    /// Exception Return Address
+    /// 异常返回地址（ERA）
     pub era: usize,
 }
 
 impl TrapFrame {
-    // 创建上下文信息
+    /// 创建新的 TrapFrame，上下文初始化。
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -30,10 +34,12 @@ impl TrapFrame {
 }
 
 impl TrapFrame {
+    /// 系统调用返回时，推进 ERA。
     pub fn syscall_ok(&mut self) {
         self.era += 4;
     }
 
+    /// 获取系统调用参数（前 6 个）。
     #[inline]
     pub fn args(&self) -> [usize; 6] {
         [
@@ -49,7 +55,7 @@ impl TrapFrame {
 
 impl Index<TrapFrameArgs> for TrapFrame {
     type Output = usize;
-
+    /// 按 TrapFrameArgs 枚举索引 TrapFrame 字段。
     fn index(&self, index: TrapFrameArgs) -> &Self::Output {
         match index {
             TrapFrameArgs::SEPC => &self.era,
@@ -66,6 +72,7 @@ impl Index<TrapFrameArgs> for TrapFrame {
 }
 
 impl IndexMut<TrapFrameArgs> for TrapFrame {
+    /// 按 TrapFrameArgs 枚举可变索引 TrapFrame 字段。
     fn index_mut(&mut self, index: TrapFrameArgs) -> &mut Self::Output {
         match index {
             TrapFrameArgs::SEPC => &mut self.era,

@@ -11,26 +11,49 @@ use super::{EscapeReason, TrapType};
 
 global_asm!(include_str!("aarch64/trap.S"));
 
+///
+/// AArch64 架构下的异常与中断处理模块。
+///
+/// 负责异常分发、TrapFrame 恢复、用户态任务切换等。
+/// 异常类型。
 #[repr(u8)]
 #[derive(Debug, PartialEq)]
 #[allow(dead_code)]
 enum TrapKind {
+    /// 同步异常。
     Synchronous = 0,
+    /// IRQ 中断。
     Irq = 1,
+    /// FIQ 中断。
     Fiq = 2,
+    /// 系统错误。
     SError = 3,
 }
 
+/// 异常来源。
 #[repr(u8)]
 #[derive(Debug)]
 #[allow(dead_code)]
 enum TrapSource {
+    /// 当前 SP 位于 EL0。
     CurrentSpEl0 = 0,
+    /// 当前 SP 位于 ELx。
     CurrentSpElx = 1,
+    /// 低特权 AArch64。
     LowerAArch64 = 2,
+    /// 低特权 AArch32。
     LowerAArch32 = 3,
 }
 
+/// 处理异常主入口。
+///
+/// # 参数
+/// - `tf`: 当前 TrapFrame。
+/// - `kind`: 异常类型。
+/// - `source`: 异常来源。
+///
+/// # 返回值
+/// 返回异常类型 [`TrapType`]。
 #[no_mangle]
 fn handle_exception(tf: &mut TrapFrame, kind: TrapKind, source: TrapSource) -> TrapType {
     if kind == TrapKind::Irq {
@@ -96,6 +119,9 @@ fn handle_exception(tf: &mut TrapFrame, kind: TrapKind, source: TrapSource) -> T
     trap_type
 }
 
+/// 初始化异常向量表。
+///
+/// 设置 VBAR_EL1 寄存器为异常向量基址。
 pub fn init() {
     extern "C" {
         fn exception_vector_base();
@@ -103,6 +129,16 @@ pub fn init() {
     VBAR_EL1.set(exception_vector_base as _);
 }
 
+/// 用户态上下文恢复裸函数。
+///
+/// # 安全性
+/// 直接操作底层寄存器和栈，调用者需保证 context 合法。
+///
+/// # 参数
+/// - `context`: TrapFrame 指针。
+///
+/// # 返回值
+/// 返回异常类型 [`TrapKind`]。
 #[naked]
 extern "C" fn user_restore(context: *mut TrapFrame) -> TrapKind {
     unsafe {
@@ -148,6 +184,13 @@ extern "C" fn user_restore(context: *mut TrapFrame) -> TrapKind {
     }
 }
 
+/// 切换到用户态并运行任务。
+///
+/// # 参数
+/// - `cx`: 用户态 TrapFrame。
+///
+/// # 返回值
+/// 返回 [`EscapeReason`]，表示任务逃逸原因。
 pub fn run_user_task(cx: &mut TrapFrame) -> EscapeReason {
     let trap_kind = user_restore(cx);
     handle_exception(cx, trap_kind, TrapSource::LowerAArch64).into()

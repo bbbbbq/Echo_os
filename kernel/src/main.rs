@@ -26,6 +26,16 @@ use boot::boot_page_table;
 pub mod backtrace;
 use backtrace::backtrace;
 
+//! Echo_os 内核主入口模块
+//!
+//! 负责内核初始化、主循环、异常处理等核心功能。
+
+/// 内核 panic 时的处理函数。
+///
+/// # 参数
+/// * `info` - panic 信息。
+///
+/// 该函数会打印 panic 信息并关闭系统。
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     if let Some(location) = info.location() {
@@ -41,6 +51,18 @@ fn panic(info: &PanicInfo) -> ! {
     os_shut_down();
 }
 
+/// 内核主入口函数。
+///
+/// # 参数
+/// * `hartid` - 当前 CPU 的硬件线程编号。
+/// * `dtb` - 设备树地址。
+///
+/// # 安全
+/// 该函数为裸机入口，需保证调用环境正确。
+///
+/// # 行为
+/// 初始化控制台、内存、异常、设备树、文件系统等，
+/// 并启动第一个用户进程，进入任务调度主循环。
 #[unsafe(no_mangle)]
 pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     console::init();
@@ -62,6 +84,12 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     arch::os_shut_down();
 }
 
+/// 测试文件系统根目录下的文件列表。
+///
+/// # 示例
+/// ```
+/// test_ls();
+/// ```
 pub fn test_ls() {
     let file = File::open(&"/".to_string(), OpenFlags::O_DIRECTORY | OpenFlags::O_RDWR).unwrap();
     let mut buffer = Vec::<DirEntry>::new();

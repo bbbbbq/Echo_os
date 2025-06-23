@@ -1,11 +1,17 @@
+//! /dev/vda 设备节点实现
+//!
+//! 提供块设备节点的基本接口。
+
 use crate::vfs::{FileType, Inode, VfsResult};
 
+/// /dev/vda 设备结构体。
 #[derive(Debug)]
 pub struct VdaDev {
     file_type: FileType,
 }
 
 impl VdaDev {
+    /// 创建新的 VdaDev 实例。
     pub fn new() -> Self {
         Self {
             file_type: FileType::BlockDevice,
@@ -14,6 +20,7 @@ impl VdaDev {
 }
 
 impl Inode for VdaDev {
+    /// 获取设备类型。
     fn get_type(&self) -> VfsResult<FileType> {
         Ok(self.file_type)
     }
@@ -54,6 +61,7 @@ impl Inode for VdaDev {
         core::unimplemented!()
     }
     
+    /// 刷新操作为无操作。
     fn flush(&self) -> VfsResult<()> {
         Ok(())
     }

@@ -1,3 +1,7 @@
+//! Virtio 块设备驱动实现
+//!
+//! 提供 Virtio 块设备的注册、读写、ID分配等功能。
+
 extern crate alloc;
 
 use crate::halimpl::HalImpl;
@@ -14,14 +18,18 @@ use uint_allocator::create_uint_allocator;
 use device_set::push_device; // Renamed in Cargo.toml for virtio crate
 use log::{info, trace};
 
+/// Virtio 块设备驱动结构体。
 pub struct VirtioBlkDriver<T>
 where
     T: Transport + Send + Sync,
 {
+    /// 内部VirtIO块设备对象
     pub inner: Mutex<VirtIOBlk<HalImpl, T>>,
+    /// 驱动ID
     pub id: usize,
 }
 
+/// Driver trait实现。
 impl<T> Driver for VirtioBlkDriver<T>
 where
     T: Transport + Send + Sync + 'static,
@@ -46,10 +54,12 @@ where
     }
 }
 
+/// BlockDriver trait实现。
 impl<T> BlockDriver for VirtioBlkDriver<T>
 where
     T: Transport + Send + Sync + 'static,
 {
+    /// 读取指定块到缓冲区。
     fn read(&self, block_id: usize, buf: &mut [u8]) -> Result<(), &'static str> {
         match self.inner.lock().read_blocks(block_id as usize, buf) {
             Ok(_) => Ok(()),
@@ -57,6 +67,7 @@ where
         }
     }
 
+    /// 写入缓冲区到指定块。
     fn write(&self, block_id: usize, buf: &[u8]) -> Result<(), &'static str> {
         match self.inner.lock().write_blocks(block_id as usize, buf) {
             Ok(_) => Ok(()),
@@ -64,6 +75,7 @@ where
         }
     }
 
+    /// 获取块设备容量。
     fn capacity(&self) -> u64 {
         self.inner.lock().capacity()
     }
@@ -75,6 +87,7 @@ impl<T> VirtioBlkDriver<T>
 where
     T: Transport + Send + Sync + 'static,
 {
+    /// 创建新的Virtio块设备驱动。
     pub fn new(inner: VirtIOBlk<HalImpl, T>) -> Self {
         let id = VIRTIO_DRIVER_ID
             .lock()
@@ -88,6 +101,10 @@ where
     }
 }
 
+/// C接口：注册块设备。
+///
+/// # Safety
+/// 仅供底层设备探测时调用。
 #[unsafe(no_mangle)]
 pub extern "C" fn block_device(transport_ptr: *mut u8) {
     let transport_box = unsafe { Box::from_raw(transport_ptr as *mut MmioTransport) };

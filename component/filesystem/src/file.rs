@@ -1,3 +1,7 @@
+//! 文件(File)对象与操作实现
+//!
+//! 提供文件打开、读写、目录操作、属性查询等功能。
+
 use crate::mount::get_mount_node;
 use crate::path::Path;
 use crate::vfs::{DirEntry, FileType, Inode, VfsError, VfsResult};
@@ -10,6 +14,7 @@ use core::fmt::Debug;
 use bitflags::bitflags;
 
 bitflags! {
+    /// 文件打开标志位。
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct OpenFlags: usize {
         const O_RDONLY    = 0o0;
@@ -35,21 +40,25 @@ bitflags! {
 }
 
 impl OpenFlags {
+    /// 是否可读。
     pub fn is_readable(&self) -> bool {
         let mode = self.bits() & 0x3;
         mode == Self::O_RDONLY.bits() || mode == Self::O_RDWR.bits()
     }
 
+    /// 是否可写。
     pub fn is_writable(&self) -> bool {
         let mode = self.bits() & 0x3;
         mode == Self::O_WRONLY.bits() || mode == Self::O_RDWR.bits()
     }
 
+    /// 创建可读写标志。
     pub fn new_read_write() -> Self {
         Self::O_RDWR
     }
 }
 
+/// 文件对象。
 #[derive(Debug, Clone)]
 pub struct File {
     pub inner: Arc<dyn Inode>,
@@ -59,6 +68,7 @@ pub struct File {
 }
 
 impl File {
+    /// 相对当前文件打开子文件。
     pub fn open_relative(&self, file_name: &str,open_flags:OpenFlags) -> VfsResult<Self> {
         let current_inode = self.inner.clone();
         let inode = current_inode.lookup(file_name)?;
@@ -71,6 +81,7 @@ impl File {
         })
     }
 
+    /// 以当前文件为目录，递归打开指定路径。
     pub fn open_at(&self, path: &str, open_flags: OpenFlags) -> VfsResult<Self> {
         if path == "." {
             return Ok(Self {
@@ -153,6 +164,7 @@ impl File {
         }
     }
 
+    /// 以绝对路径打开文件。
     pub fn open(path: &str, open_flags: OpenFlags) -> VfsResult<Self> {
         let (resolved_mount_path, mount_node) = match get_mount_node(path.into()) {
             Some((p, node)) => (p, node),
@@ -266,6 +278,7 @@ impl File {
         }
     }
 
+    /// 创建新文件对象。
     pub fn new(inner: Arc<dyn Inode>, openflags: OpenFlags) -> Self {
         Self {
             inner,
@@ -275,6 +288,7 @@ impl File {
         }
     }
 
+    /// 从指定偏移读取。
     pub fn read_at(&self, offset: usize, buf: &mut [u8]) -> VfsResult<usize> {
         if !self.openflags.is_readable() {
             return Err(VfsError::PermissionDenied);
@@ -282,6 +296,7 @@ impl File {
         self.inner.read_at(offset, buf)
     }
 
+    /// 顺序读取。
     pub fn read(&mut self, buf: &mut [u8]) -> VfsResult<usize> {
         if !self.openflags.is_readable() {
             return Err(VfsError::PermissionDenied);
@@ -291,6 +306,7 @@ impl File {
         Ok(len)
     }
 
+    /// 从指定偏移写入。
     pub fn write_at(&self, offset: usize, buf: &[u8]) -> VfsResult<usize> {
         if !self.openflags.is_writable() {
             return Err(VfsError::PermissionDenied);
@@ -298,6 +314,7 @@ impl File {
         self.inner.write_at(offset, buf)
     }
 
+    /// 顺序写入。
     pub fn write(&mut self, buf: &[u8]) -> VfsResult<usize> {
         if !self.openflags.is_writable() {
             return Err(VfsError::PermissionDenied);
@@ -307,6 +324,7 @@ impl File {
         Ok(len)
     }
 
+    /// 刷新文件。
     pub fn flush(&self) -> VfsResult<()> {
         if !self.openflags.is_writable() {
             return Err(VfsError::PermissionDenied);
@@ -314,6 +332,7 @@ impl File {
         self.inner.flush()
     }
 
+    /// 创建目录。
     pub fn mkdir_at(&self, path: &str) -> VfsResult<()> {
         if !self.openflags.is_writable() {
             return Err(VfsError::PermissionDenied);
@@ -321,6 +340,7 @@ impl File {
         self.inner.mkdir_at(path)
     }
 
+    /// 读取目录项。
     pub fn read_dir(&self) -> VfsResult<Vec<DirEntry>> {
         if !self.openflags.is_readable() {
             return Err(VfsError::PermissionDenied);
@@ -328,11 +348,13 @@ impl File {
         self.inner.read_dir()
     }
 
+    /// 获取文件大小。
     pub fn get_file_size(&self) -> VfsResult<usize> {
         let attr = self.inner.getattr()?;
         Ok(attr.size)
     }
 
+    /// 填充Stat结构体。
     pub fn stat(&self, stat: &mut Stat) -> VfsResult<()> {
         let attr = self.inner.getattr()?;
         stat.st_size = attr.size as u64;
@@ -360,14 +382,17 @@ impl File {
         Ok(())
     }
 
+    /// 删除文件。
     pub fn remove(&self, name: &str) -> VfsResult<()> {
         self.inner.rm_file(name)
     }
 
+    /// 删除目录。
     pub fn rmdir(&self, name: &str) -> VfsResult<()> {
         self.inner.rm_dir(name)
     }
 
+    /// 读取目录项到buffer。
     pub fn getdents(&self, buffer:&mut Vec<DirEntry>) -> Result<usize, VfsError> {
         self.read_dir().map(|entries| {
             let count = entries.len();
@@ -376,6 +401,7 @@ impl File {
         })
     }
 
+    /// 创建设备文件对象。
     pub fn new_dev(inner: Arc<dyn Inode>) -> Self {
         Self {
             inner,
@@ -385,15 +411,18 @@ impl File {
         }
     }
 
+    /// 挂载文件系统（未实现）。
     pub fn mount(&self, _path: &str) -> Result<usize, VfsError> {
        unimplemented!()
     }
 
+    /// 删除自身。
     pub fn remove_self(&self) -> VfsResult<()> {
         let dir = Self::open(&self.path.to_string(), OpenFlags::O_DIRECTORY)?;
         dir.remove(&self.path.get_name())
     }
 
+    /// 查找子文件。
     pub fn find(&self,path:Path) -> VfsResult<File> {
         if path.is_current()
         {
@@ -404,6 +433,7 @@ impl File {
     }
 }
 
+/// 文件属性结构体，兼容stat。
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Stat {
@@ -427,6 +457,7 @@ pub struct Stat {
 }
 
 impl Stat {
+    /// 创建默认Stat。
     pub fn new() -> Self {
         Self::default()
     }

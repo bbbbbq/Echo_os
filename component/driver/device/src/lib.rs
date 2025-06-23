@@ -1,5 +1,9 @@
 #![no_std]
 
+//! 设备管理模块
+//!
+//! 提供设备树解析、virtio设备探测与注册等功能。
+
 extern crate alloc;
 extern crate log;
 
@@ -17,6 +21,10 @@ use virtio_drivers::transport::Transport;
 use virtio_drivers::transport::mmio::MmioTransport;
 use virtio_drivers::transport::mmio::VirtIOHeader;
 
+/// 解析设备树并初始化设备。
+///
+/// # 参数
+/// * `dtb` - 设备树物理地址。
 pub fn init_dt(dtb: usize) {
     info!("device tree @ {:#x}", dtb);
     // Safe because the pointer is a valid pointer to unaliased memory.
@@ -24,6 +32,10 @@ pub fn init_dt(dtb: usize) {
     walk_dt(fdt);
 }
 
+/// 遍历设备树节点，探测virtio设备。
+///
+/// # 参数
+/// * `fdt` - 设备树对象。
 pub fn walk_dt(fdt: Fdt) {
     for node in fdt.all_nodes() {
         if let Some(compatible) = node.compatible() {
@@ -34,6 +46,10 @@ pub fn walk_dt(fdt: Fdt) {
     }
 }
 
+/// 探测并注册virtio设备。
+///
+/// # 参数
+/// * `node` - 设备树节点。
 pub fn virtio_probe(node: FdtNode) {
     if let Some(reg) = node.reg().next() {
         let paddr = reg.starting_address as usize;
@@ -50,9 +66,14 @@ pub fn virtio_probe(node: FdtNode) {
 }
 
 unsafe extern "C" {
+    /// 注册块设备的外部C函数接口。
     fn block_device(transport: *mut u8);
 }
 
+/// 注册virtio设备到设备集。
+///
+/// # 参数
+/// * `transport` - virtio传输对象。
 pub fn virtio_device(transport: impl Transport + Send + Sync + 'static) {
     match transport.device_type() {
         virtio_drivers::transport::DeviceType::Block => {
@@ -64,6 +85,10 @@ pub fn virtio_device(transport: impl Transport + Send + Sync + 'static) {
     }
 }
 
+/// 获取MMIO设备的起止地址范围。
+///
+/// # 返回
+/// (起始地址, 结束地址)
 pub fn get_mmio_start_end() -> (usize, usize) {
     let start = 0x10000000;
     let end = 0x1000f000;

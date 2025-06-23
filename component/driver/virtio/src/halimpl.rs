@@ -1,3 +1,7 @@
+//! Virtio HAL 层实现
+//!
+//! 提供物理内存分配、MMIO映射、缓存共享等功能。
+
 use core::ptr::NonNull;
 use frame::{FrameTracer, alloc_continues, dealloc_continues};
 use spin::Mutex;
@@ -11,7 +15,9 @@ use log::{debug, trace};
 pub struct HalImpl;
 use memory_addr::MemoryAddr;
 
+/// Virtio HAL trait实现。
 unsafe impl Hal for HalImpl {
+    /// 分配DMA物理页并返回物理地址和虚拟地址。
     fn dma_alloc(pages: usize, _direction: BufferDirection) -> (PhysAddr, NonNull<u8>) {
         let frames = alloc_continues(pages);
         for i in 0..frames.len() {
@@ -45,6 +51,7 @@ unsafe impl Hal for HalImpl {
         (phys_addr_adjusted, vaddr)
     }
 
+    /// 释放DMA物理页。
     unsafe fn dma_dealloc(_paddr: PhysAddr, _vaddr: NonNull<u8>, pages: usize) -> i32 {
         // Convert the usize paddr back to our PhysAddr type
         let paddr_obj = memory_addr::PhysAddr::from_usize(_paddr);
@@ -54,6 +61,7 @@ unsafe impl Hal for HalImpl {
         0
     }
 
+    /// MMIO物理地址转虚拟地址。
     unsafe fn mmio_phys_to_virt(paddr: PhysAddr, _size: usize) -> NonNull<u8> {
         trace!(
             "mmio_phys_to_virt: paddr: {:?}, virt: {:?}",
@@ -64,6 +72,7 @@ unsafe impl Hal for HalImpl {
         NonNull::new((usize::from(paddr) | VIRT_ADDR_START) as *mut u8).unwrap()
     }
 
+    /// 共享缓存区，返回物理地址。
     unsafe fn share(buffer: NonNull<[u8]>, _direction: BufferDirection) -> PhysAddr {
         let raw_ptr = buffer.as_ptr() as *mut u8 as usize;
         // trace!(
@@ -75,5 +84,6 @@ unsafe impl Hal for HalImpl {
         PhysAddr::from(raw_ptr & !VIRT_ADDR_START)
     }
 
+    /// 取消缓存区共享。
     unsafe fn unshare(_paddr: PhysAddr, _buffer: NonNull<[u8]>, _direction: BufferDirection) {}
 }

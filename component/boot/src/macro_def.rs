@@ -1,10 +1,13 @@
-/// Macro to export a function as the kernel entry point with name "kernel_main"
+/// 导出函数为内核入口点（符号名为 "kernel_main"）的宏。
 ///
-/// # Example
-/// ```
+/// # 用途
+/// 用于将自定义函数导出为裸机内核的主入口。
+///
+/// # 示例
+/// ```rust
 /// #[kernel_main]
 /// pub fn my_kernel_entry() -> ! {
-///     // Kernel initialization code
+///     // 内核初始化代码
 /// }
 /// ```
 #[macro_export]

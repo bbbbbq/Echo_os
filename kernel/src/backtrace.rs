@@ -1,6 +1,14 @@
 use console::println;
 use core::arch::asm;
 
+//! 栈回溯(backtrace)模块
+//!
+//! 提供在异常或调试时打印当前调用栈的功能。
+
+/// 打印当前调用栈的回溯信息。
+///
+/// 该函数会遍历帧指针链表，输出每一帧的返回地址。
+/// 主要用于调试和异常分析。
 #[inline(never)]
 pub fn backtrace() {
     let mut fp: usize;

@@ -1,5 +1,9 @@
 use sbi_rt::{system_reset, NoReason, Shutdown};
 use log::debug;
+
+//! RISC-V 64 架构相关实现。
+
+/// 关闭操作系统（通过SBI）。
 pub fn os_shut_down() -> ! {
     system_reset(Shutdown, NoReason);
     unreachable!()
@@ -7,6 +11,10 @@ pub fn os_shut_down() -> ! {
 
 use riscv::register::satp::{self, Mode};
 
+/// 切换页表。
+///
+/// # 参数
+/// * `paddr` - 新页表的物理地址。
 pub fn change_pagetable(paddr: usize) {
     // 1. Read the current Satp value using the module's read() function
     debug!("paddr: {:x}", paddr);
@@ -24,24 +32,33 @@ pub fn change_pagetable(paddr: usize) {
     }
 }
 
+/// 刷新TLB。
 pub fn flush_tlb() {
     unsafe {
         riscv::asm::sfence_vma_all();
     }
 }
 
-
+/// 获取CPU数量。
+///
+/// # 返回
+/// 当前系统的CPU数量（暂时写死为1）。
 pub fn get_cpu_num() -> usize {
     // TODO: This should be initialized from the device tree at boot time.
     const CPU_NUM: usize = 1;
     CPU_NUM
 }
 
+/// 获取当前CPU编号。
+///
+/// # 返回
+/// 当前CPU编号（暂时写死为0）。
 pub fn get_cur_cpu_id() -> usize {
     // riscv::register::mhartid::read()
     0
 }
 
+/// 等待中断。
 pub fn wait_for_interrupt() {
     unsafe {
         riscv::asm::wfi();

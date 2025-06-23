@@ -1,3 +1,7 @@
+//! lwext4 文件系统适配层
+//!
+//! 提供对 lwext4-rust 的块设备适配、文件系统包装、Inode实现等。
+
 use lwext4_rust;
 use lwext4_rust::bindings::{
     O_CREAT, O_RDWR, O_TRUNC, O_WRONLY, SEEK_SET, ext4_inode, ext4_raw_inode_fill,
@@ -44,6 +48,7 @@ fn try_get_block_driver(dev_id: usize) -> Result<Arc<dyn BlockDriver>, String> {
     }
 }
 
+/// 块设备包装器，适配 lwext4 的块读写。
 pub struct Ext4DiskWrapper {
     _id: usize,
     offset: usize,
@@ -52,6 +57,7 @@ pub struct Ext4DiskWrapper {
 }
 
 impl Ext4DiskWrapper {
+    /// 创建新的块设备包装器。
     pub fn new(id: usize) -> Self {
         Self {
             _id: id,
@@ -61,6 +67,7 @@ impl Ext4DiskWrapper {
         }
     }
 
+    /// 获取块设备总字节数。
     pub fn size(&self) -> u64 {
         match try_get_block_driver(self.dev_id) {
             Ok(dev) => dev.capacity() * BLOCK_SIZE as u64,
@@ -74,6 +81,7 @@ impl Ext4DiskWrapper {
         }
     }
 
+    /// 获取当前偏移。
     pub fn position(&self) -> u64 {
         (self.block_id * BLOCK_SIZE + self.offset) as u64
     }

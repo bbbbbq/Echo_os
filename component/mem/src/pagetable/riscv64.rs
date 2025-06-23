@@ -1,3 +1,7 @@
+//! RISC-V 64 架构页表实现
+//!
+//! 提供Sv39页表的创建、映射、查询、切换等功能。
+
 use crate::memregion::MemRegion;
 use crate::memset::MemSet;
 use crate::pag_hal;
@@ -24,6 +28,7 @@ unsafe extern "C" {
     fn _end();
 }
 
+/// 获取启动页表。
 pub fn get_boot_page_table() -> PageTable {
     let vaddr = unsafe { boot_page_table() };
     // The boot_page_table() returns a virtual address, but SATP needs a physical address.
@@ -32,6 +37,7 @@ pub fn get_boot_page_table() -> PageTable {
     PageTable::new_from_addr(PhysAddr::from(paddr))
 }
 
+/// Sv39页表包装结构体。
 pub struct PageTable {
     pub page_table: Sv39PageTable<pag_hal::PagingHandlerImpl>,
 }
@@ -43,12 +49,14 @@ impl Clone for PageTable {
 }
 
 impl PageTable {
+    /// 创建新的页表。
     pub fn new() -> Self {
         Self {
             page_table: Sv39PageTable::try_new().expect("Failed to create Sv39PageTable")
         }
     }
 
+    /// 由物理地址创建页表。
     pub fn new_from_addr(addr: PhysAddr) -> Self {
         #[repr(C)]
         struct TempPageTable {
@@ -66,6 +74,7 @@ impl PageTable {
         }
     }
 
+    /// 恢复为boot页表。
     pub fn restore(&mut self) -> Result<(), ()> {
         self.release();
         let paddr = unsafe { boot_page_table() };
@@ -109,6 +118,7 @@ impl PageTable {
         Ok(())
     }
 
+    /// 释放页表。
     pub fn release(&mut self) {
         let current_pte_array = self.page_table.root_paddr().as_usize() as *mut [u64; 512];
         unsafe {
@@ -118,6 +128,7 @@ impl PageTable {
         }
     }
 
+    /// 映射一段用户空间区域并分配物理帧。
     pub fn map_region_user_frame(&mut self, area: &mut MemRegion) {
         let start_vaddr = area.vaddr_range.start;
         let size = area.vaddr_range.size();
@@ -136,12 +147,14 @@ impl PageTable {
         area.is_mapped = true;
     }
 
+    /// 映射MemSet所有区域。
     pub fn map_mem_set_frame(&mut self, mem_set: MemSet) {
         for mut region in mem_set.regions.into_iter() {
             self.map_region_user_frame(&mut region);
         }
     }
 
+    /// 映射MemSet所有区域（用户空间）。
     pub fn map_mem_set_user(&mut self, mem_set: MemSet) -> Result<(), ()> {
         for mut region in mem_set.regions.into_iter() {
             self.map_region_user(&mut region)?;
@@ -149,10 +162,12 @@ impl PageTable {
         Ok(())
     }
 
+    /// 切换当前页表。
     pub fn change_pagetable(&self) {
         change_pagetable(self.page_table.root_paddr().as_usize())
     }
 
+    /// 映射一段用户空间区域。
     pub fn map_region_user(&mut self, region: &mut MemRegion) -> Result<(), ()> {
         info!("region : {:?}", region);
         if let Some(paddr_range) = region.paddr_range {
@@ -176,10 +191,12 @@ impl PageTable {
         }
     }
 
+    /// 刷新TLB。
     pub fn flush() {
         arch::flush_tlb();
     }
 
+    /// 查询虚拟地址对应物理地址。
     pub fn translate(&self, vaddr: VirtAddr) -> Option<PhysAddr> {
         match self.page_table.query(vaddr) {
             Ok((paddr, flags, page_size)) => {
@@ -195,6 +212,7 @@ impl PageTable {
         }
     }
 
+    /// 取消映射一段区域。
     pub fn unmap_region(&mut self, region: &mut MemRegion) {
         let start_vaddr = region.vaddr_range.start;
         let size = region.vaddr_range.size();
@@ -205,6 +223,7 @@ impl PageTable {
         arch::flush_tlb();
     }
 
+    /// 打印当前页表映射区域。
     pub fn print_maped_region(&self) {
         println!(
             "[kernel] Mapped Regions for PageTable @ {:#x}:",
@@ -248,6 +267,7 @@ impl PageTable {
     }
 }
 
+/// 切换到boot页表。
 pub fn change_boot_pagetable() {
     unsafe extern "C" {
         unsafe fn boot_page_table() -> usize;

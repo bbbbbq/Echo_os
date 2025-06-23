@@ -1,5 +1,10 @@
 #![no_std]
 #![feature(alloc_error_handler)]
+
+//! 内核堆内存管理模块
+//!
+//! 提供全局堆分配器初始化、用户堆管理等功能。
+
 extern crate alloc;
 
 use alloc::string::ToString;
@@ -25,6 +30,11 @@ static mut HEAP_SPACE: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
 static HEAP_ALLOCATOR: LockedHeap<30> = LockedHeap::empty();
 
 /// 初始化堆内存分配器
+///
+/// # 用法
+/// ```
+/// heap::init();
+/// ```
 pub fn init() {
     unsafe {
         // Get the heap memory address using raw pointer operations
@@ -48,6 +58,7 @@ pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
     panic!("Heap allocation error, layout = {:?}", layout)
 }
 
+/// 用户堆管理结构体。
 #[derive(Debug, Clone, Copy)]
 pub struct HeapUser {
     pub virt_range: VirtAddrRange,
@@ -55,6 +66,7 @@ pub struct HeapUser {
 }
 
 impl HeapUser {
+    /// 创建新的用户堆管理器。
     pub fn new(virt_range: VirtAddrRange) -> Self {
         assert!(
             virt_range.start <= virt_range.end,
@@ -71,18 +83,22 @@ impl HeapUser {
         }
     }
 
+    /// 设置堆顶。
     pub fn set_heap_top(&mut self, top: usize) {
         self.virt_range.end = VirtAddr::from_usize(top);
     }
 
+    /// 获取堆底。
     pub fn get_bottom(&self) -> usize {
         self.virt_range.start.as_usize()
     }
 
+    /// 获取堆顶。
     pub fn get_top(&self) -> usize {
         self.virt_range.end.as_usize()
     }
 
+    /// 为堆分配一页并映射到页表。
     pub fn add_frame(&self,pagetable: &mut PageTable)
     {
         let heap_top = self.get_top();
@@ -93,16 +109,19 @@ impl HeapUser {
         pagetable.map_region_user_frame(&mut map_region);
     }
 
+    /// 获取当前堆指针。
     pub fn get_ptr(&self) -> usize
     {
         self.cur_heap_ptr
     }
 
+    /// 设置当前堆指针。
     pub fn set_ptr(&mut self, ptr: usize)
     {
         self.cur_heap_ptr = ptr;
     }
 
+    /// sbrk风格堆扩展。
     pub fn sbrk(&mut self, increment: usize ,pagetable: &mut PageTable)
     {
         let pages = increment.div_ceil(PAGE_SIZE.try_into().unwrap());
@@ -117,6 +136,7 @@ impl HeapUser {
         self.set_heap_top(new_top);
     }
 
+    /// brk风格堆扩展。
     pub fn brk(&mut self, addr: usize,pagetable: &mut PageTable)
     {
         let heap_bottom = self.get_bottom();

@@ -1,3 +1,7 @@
+//! 用户栈(StackRegion)管理模块
+//!
+//! 提供用户栈的分配、映射、数据压栈等功能。
+
 use alloc::string::ToString;
 use memory_addr::{align_up, PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange};
 use core::mem::size_of;
@@ -8,6 +12,7 @@ use crate::{
     pagetable::PageTable,
 };
 
+/// 用户栈区域结构体。
 #[derive(Debug, Clone)]
 pub struct StackRegion {
     pub paddr_range: PhysAddrRange,
@@ -17,6 +22,7 @@ pub struct StackRegion {
 }
 
 impl StackRegion {
+    /// 创建新的栈区域。
     pub fn new(paddr_range: PhysAddrRange, vaddr_range: VirtAddrRange) -> Self {
         Self {
             paddr_range,
@@ -26,6 +32,7 @@ impl StackRegion {
         }
     }
 
+    /// 创建空栈区域。
     pub fn new_zero() -> Self {
         Self {
             paddr_range: PhysAddrRange::new(PhysAddr::from_usize(0), PhysAddr::from_usize(0)),
@@ -35,10 +42,12 @@ impl StackRegion {
         }
     }
 
+    /// 获取栈顶虚拟地址。
     pub fn get_top(&self) -> usize {
         self.vaddr_range.end.as_usize()
     }
 
+    /// 将栈区域映射到页表。
     pub fn map(&mut self, pagetable: &mut PageTable) {
         let mut mem_region = MemRegion::new_mapped(
             self.vaddr_range.start,
@@ -53,10 +62,12 @@ impl StackRegion {
         self.is_mapped = true;
     }
 
+    /// 获取当前sp。
     pub fn get_sp(&self) -> usize {
         self.sp
     }
 
+    /// 虚拟地址转物理地址。
     pub fn vaddr_to_paddr(&self, vaddr: VirtAddr) -> PhysAddr {
         if !self.vaddr_range.contains(vaddr) {
             panic!("Virtual address not in range");
@@ -65,6 +76,7 @@ impl StackRegion {
         PhysAddr::from_usize(self.paddr_range.start.as_usize() + offset)
     }
 
+    /// 压入usize数组。
     pub fn push_usizes(&mut self, buffer: &[usize]) -> usize {
         let len = buffer.len();
         let bytes_len = len * size_of::<usize>();
@@ -82,6 +94,7 @@ impl StackRegion {
         new_sp
     }
 
+    /// 压入字节数组。
     pub fn push_bytes(&mut self, bytes: &[u8]) -> usize {
         let len = bytes.len();
         if len == 0 {
@@ -99,6 +112,7 @@ impl StackRegion {
         new_sp
     }
 
+    /// 压入字符串（带结尾0）。
     pub fn push_str(&mut self, str: &str) -> usize {
         let bytes = str.as_bytes();
         // +1 for null terminator
@@ -118,6 +132,7 @@ impl StackRegion {
         new_sp
     }
 
+    /// 压入单个usize。
     pub fn push_num(&mut self, num: usize) -> usize {
         let ulen = size_of::<usize>();
         let new_sp = self.sp - ulen;
