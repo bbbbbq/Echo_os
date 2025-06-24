@@ -5,10 +5,19 @@ use alloc::boxed::Box;
 use async_recursion::async_recursion;
 use log::info;
 use log::warn;
+
 use trap::trapframe::TrapFrame;
 use log::debug;
 use crate::user_handler::handler::UserTaskControlFlow;
 
+//!
+//! 用户任务入口与调度循环。
+//!
+//! 提供 user_entry 入口和 UserHandler::entry_point 调度主循环。
+
+/// 用户任务异步入口。
+///
+/// 获取当前用户任务并进入调度循环。
 #[async_recursion(Sync)]
 pub async fn user_entry() {
     if let Some(task) = get_cur_usr_task() {
@@ -22,8 +31,17 @@ pub async fn user_entry() {
 }
 
 impl UserHandler {
+    /// 用户任务主调度循环。
+    ///
+    /// # 参数
+    /// - `cx_ref`: 当前 TrapFrame
+    ///
+    /// # 行为
+    /// 处理系统调用、检查退出、定时器等。
     pub async fn entry_point(&mut self, cx_ref: &mut TrapFrame) {
         loop {
+
+
             self.check_timer();
 
             let res = self.handle_syscall(cx_ref).await;

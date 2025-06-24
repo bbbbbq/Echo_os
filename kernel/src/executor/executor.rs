@@ -14,36 +14,38 @@ use core::task::Poll;
 use lazy_static::*;
 use alloc::boxed::Box;
 use crate::executor::task::KernelTask;
-/// Global task queue
+/// 全局任务队列。
 pub(crate) static TASK_QUEUE: Mutex<VecDeque<AsyncTaskItem>> = Mutex::new(VecDeque::new());
 
 lazy_static! {
     pub static ref GLOBLE_EXECUTOR: Executor = Executor::new();
+    /// 全局任务映射表。
     pub static ref TASK_MAP: Mutex<BTreeMap<TaskId, Arc<dyn AsyncTask>>> = Mutex::new(BTreeMap::new());
 }
 
-/// Executor
+/// 任务执行器。
 pub struct Executor {
     cores: Vec<Mutex<Option<Arc<dyn AsyncTask>>>>,
     is_inited: AtomicBool,
 }
 
-/// Waker
+/// 任务唤醒器。
 pub struct Waker {
     #[allow(dead_code)]
     task_id: TaskId,
 }
 
 impl Wake for Waker {
+    /// 唤醒任务。
     fn wake(self: Arc<Self>) {
         self.wake_by_ref();
     }
-
+    /// 通过引用唤醒任务。
     fn wake_by_ref(self: &Arc<Self>) {}
 }
 
 impl Executor {
-    /// Create a new executor
+    /// 创建新的执行器。
     pub fn new() -> Self {
         let cpu_num = get_cpu_num();
         let mut cores: Vec<spin::mutex::Mutex<Option<Arc<dyn AsyncTask + 'static>>>> = Vec::with_capacity(cpu_num);
@@ -56,14 +58,14 @@ impl Executor {
         }
     }
 
-    /// Spawn a new task
+    /// 向任务队列中添加新任务。
     pub fn spawn(&self, task: AsyncTaskItem) {
         let task_id = task.task.get_task_id();
         TASK_MAP.lock().insert(task_id, task.task.clone());
         TASK_QUEUE.lock().push_back(task);
     }
 
-    /// Run a ready task
+    /// 运行一个就绪任务。
     pub fn run_ready_task(&self) {
         assert!(
             self.is_inited.load(core::sync::atomic::Ordering::Acquire),
@@ -116,6 +118,7 @@ impl Executor {
         }
     }
 
+    /// 循环运行所有就绪任务。
     pub fn run(&self) {
         loop {
             self.run_ready_task();
@@ -124,18 +127,18 @@ impl Executor {
 
 }
 
-/// Add a ready task to the task queue
+/// 添加就绪任务到任务队列。
 pub fn add_ready_task(task: AsyncTaskItem) {
     TASK_QUEUE.lock().push_back(task);
 }
 
-/// Get a task by its task ID
+/// 通过任务 ID 获取任务。
 pub fn tid2task(tid: TaskId) -> Option<Arc<dyn AsyncTask>> {
     let task_map = TASK_MAP.lock();
     task_map.get(&tid).cloned()
 }
 
-/// Get the current user task
+/// 获取当前 CPU 上的用户任务。
 pub fn get_cur_usr_task() -> Option<Arc<UserTask>> {
     let executor = &GLOBLE_EXECUTOR;
     let task_option_guard = executor.cores[get_cur_cpu_id()].lock();
@@ -144,7 +147,7 @@ pub fn get_cur_usr_task() -> Option<Arc<UserTask>> {
         .and_then(|task| task.clone().downcast_arc::<UserTask>().ok())
 }
 
-/// Release a task
+/// 释放指定任务。
 pub fn release_task(task_id: TaskId) {
     TASK_MAP.lock().remove(&task_id);
     let executor = &GLOBLE_EXECUTOR;
@@ -152,8 +155,7 @@ pub fn release_task(task_id: TaskId) {
     TASK_QUEUE.lock().retain(|item| item.task.get_task_id() != task_id);    
 }
 
-/// Spawn a blank task
-
+/// 启动一个空白任务。
 #[inline]
 pub fn spawn_blank(future: impl Future<Output = ()> + Send + 'static) {
     let task: Arc<dyn AsyncTask> = Arc::new(KernelTask::new());
@@ -163,7 +165,15 @@ pub fn spawn_blank(future: impl Future<Output = ()> + Send + 'static) {
     })
 }
 
+/// 启动一个指定任务。
+pub fn spawn(task: Arc<dyn AsyncTask>, future: impl Future<Output = ()> + Send + 'static) {
+    GLOBLE_EXECUTOR.spawn(AsyncTaskItem {
+        future: Box::pin(future),
+        task,
+    })
+}
 
+/// 打印任务队列信息。
 pub fn info_task_queue() {
     for task in TASK_QUEUE.lock().iter() {
         let inner = task.task.clone();

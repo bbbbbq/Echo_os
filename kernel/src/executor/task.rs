@@ -6,24 +6,30 @@ use core::pin::Pin;
 use downcast_rs::{impl_downcast, DowncastSync};
 use core::fmt::Debug;
 use arch::flush_tlb;
+///
+/// 任务 trait 及相关类型定义。
+///
+/// 提供异步任务抽象、任务类型、任务包装、内核任务实现等。
 /// A task type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskType {
+    /// 内核任务。
     Kernel,
+    /// 用户任务。
     User,
 }
 
-/// A task that can be executed asynchronously
+/// 可异步执行的任务 trait。
 pub trait AsyncTask: DowncastSync + Send + Sync + Debug {
-    /// Get the id of the task
+    /// 获取任务 ID。
     fn get_task_id(&self) -> TaskId;
-    /// Run before the kernel
+    /// 运行前的准备操作。
     fn before_run(&self);
-    /// Get task type.
+    /// 获取任务类型。
     fn get_task_type(&self) -> TaskType;
-    /// Exit a task with exit code.
+    /// 以指定退出码退出任务。
     fn exit(&self, exit_code: usize);
-    /// Check if the task was exited successfully
+    /// 检查任务是否已退出。
     fn exit_code(&self) -> Option<usize>;
 }
 
@@ -32,6 +38,7 @@ pub type PinedFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
 use bitflags::bitflags;
 
 bitflags! {
+    /// 任务克隆标志。
     #[derive(Debug)]
     pub struct CloneFlags: usize {
         const CSIGNAL      = 0x000000ff;
@@ -60,12 +67,14 @@ bitflags! {
         const IO           = 0x80000000;
     }
 }
+/// 被调度的异步任务项。
 pub struct AsyncTaskItem {
     pub future: PinedFuture,
     pub task: Arc<dyn AsyncTask>,
 }
 
 impl AsyncTaskItem {
+    /// 创建新的异步任务项。
     pub fn new(task: Arc<dyn AsyncTask>, future: PinedFuture) -> Self {
         Self { task, future }
     }
@@ -80,18 +89,21 @@ impl core::fmt::Debug for AsyncTaskItem {
     }
 }
 
+/// 内核任务实现。
 #[derive(Debug)]
 pub struct KernelTask {
     id: TaskId,
 }
 
 impl KernelTask {
+    /// 创建新的内核任务。
     pub fn new() -> Self {
         Self { id: alloc_tid() }
     }
 }
 
 impl Drop for KernelTask {
+    /// 内核任务析构时自动回收任务 ID。
     fn drop(&mut self) {
         dealloc_tid(self.id);
     }

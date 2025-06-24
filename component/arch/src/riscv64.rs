@@ -30,6 +30,7 @@ pub fn change_pagetable(paddr: usize) {
     unsafe {
         satp::write(satp_val);
     }
+    flush_tlb();
 }
 
 /// 刷新TLB。

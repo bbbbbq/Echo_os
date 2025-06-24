@@ -9,14 +9,22 @@ extern crate alloc;
 use alloc::format;
 use alloc::string::ToString;
 use config::riscv64_qemu::plat::USER_DYN_ADDR;
+<<<<<<< HEAD
 use config::target::plat::{PAGE_SIZE, USER_STACK_INIT_SIZE, USER_STACK_TOP};
+=======
+use config::target::plat::PAGE_SIZE;
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
 use core::ops::Mul;
 use filesystem::{
     file::{File, OpenFlags},
     path::Path,
 };
+<<<<<<< HEAD
 use frame::alloc_continues;
 use log::{debug, error};
+=======
+use log::{debug, warn};
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
 use log::info;
 use mem::{memregion::MemRegion, memset::MemSet};
 use mem::{memregion::MemRegionType, stack::StackRegion};
@@ -25,7 +33,36 @@ use page_table_multiarch::MappingFlags;
 use xmas_elf::sections::SectionData;
 use xmas_elf::symbol_table::DynEntry64;
 use xmas_elf::symbol_table::Entry;
+<<<<<<< HEAD
 use xmas_elf::{ElfFile, header};
+=======
+use xmas_elf::{ElfFile, program::Type};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Errno {
+    InvalidElf,
+    SectionNotFound,
+    CorruptedSection,
+    BadSectionFormat,
+    SymbolResolutionFailed,
+    RelocationFailed,
+}
+
+impl core::fmt::Display for Errno {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Errno::InvalidElf => write!(f, "Invalid ELF file"),
+            Errno::SectionNotFound => write!(f, "Section not found"),
+            Errno::CorruptedSection => write!(f, "Corrupted section"),
+            Errno::BadSectionFormat => write!(f, "Bad section format"),
+            Errno::SymbolResolutionFailed => write!(f, "Symbol resolution failed"),
+            Errno::RelocationFailed => write!(f, "Relocation failed"),
+        }
+    }
+}
+
+
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
 
 /// ELF 文件扩展trait，提供动态符号表和重定位支持。
 pub trait ElfExt {
@@ -33,6 +70,7 @@ pub trait ElfExt {
     fn relocate(&self, base: usize) -> Result<usize, &str>;
     /// 获取动态符号表。
     fn dynsym(&self) -> Result<&[DynEntry64], &'static str>;
+    fn get_ph_addr(&self) -> Result<u64, Errno>;
 }
 
 impl ElfExt for ElfFile<'_> {
@@ -106,6 +144,7 @@ impl ElfExt for ElfFile<'_> {
         info!("Relocation completed successfully");
         Ok(base)
     }
+<<<<<<< HEAD
 }
 
 /// ELF 加载结果结构体。
@@ -344,5 +383,26 @@ pub fn load_elf_frame(path: Path) -> LoadElfReturn {
         sbss_size,
         bss_start,
         bss_size,
+=======
+
+    // 获取elf加载需要的内存大小
+    fn get_ph_addr(&self) -> Result<u64, Errno> {
+        if let Some(phdr) = self
+            .program_iter()
+            .find(|ph| ph.get_type() == Ok(Type::Phdr))
+        {
+            // if phdr exists in program header, use it
+            Ok(phdr.virtual_addr())
+        } else if let Some(elf_addr) = self
+            .program_iter()
+            .find(|ph| ph.get_type() == Ok(Type::Load) && ph.offset() == 0)
+        {
+            // otherwise, check if elf is loaded from the beginning, then phdr can be inferred.
+            Ok(elf_addr.virtual_addr() + self.header.pt2.ph_offset())
+        } else {
+            warn!("elf: no phdr found, tls might not work");
+            Err(Errno::SectionNotFound)
+        }
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
     }
 }

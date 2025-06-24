@@ -1,22 +1,28 @@
 use crate::executor::sync::Sleep;
+use crate::executor::task::AsyncTask;
 use crate::user_handler::handler::UserHandler;
 use crate::executor::error::TaskError;
 use crate::user_handler::userbuf::UserBuf;
 
-use log::debug;
+use log::{debug, error};
 use struct_define::tms::TMS;
 use core::time::Duration;
 use timer::get_time;
 use struct_define::timespec::TimeSpec;
 use struct_define::uname::UTSname;
 
+//!
+//! 其它杂项系统调用实现。
+//!
+//! 提供 gettimeofday/nanosleep/times/uname/getuid/getgid/getpgid/setpgid/clock_gettime/set_robust_list/getrandom 等。
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+/// timeval 结构体，表示秒和微秒。
 pub struct TimeVal {
-    /// seconds, range in 0~999999999
+    /// 秒
     pub sec: usize,
-    /// microseconds, range in 0~999999
+    /// 微秒
     pub usec: usize,
 }
 
@@ -29,9 +35,8 @@ impl From<Duration> for TimeVal {
     }
 }
 
-
-
 impl UserHandler {
+    /// 获取当前时间（gettimeofday 系统调用）。
     pub async fn sys_gettimeofday(&self, tv_ptr: UserBuf<TimeVal>, timezone_ptr: usize) -> Result<usize, TaskError> {
         debug!(
             "sys_gettimeofday @ tv_ptr: {}, timezone: {:#x}",
@@ -42,6 +47,7 @@ impl UserHandler {
         Ok(0)
     }
 
+    /// 纳秒级睡眠（nanosleep 系统调用）。
     pub async fn sys_nanosleep(&self, req: UserBuf<TimeSpec>, _rem: UserBuf<TimeSpec>) -> Result<usize, TaskError> {
 
         let req = req.read();
@@ -53,6 +59,7 @@ impl UserHandler {
         Ok(0)
     }
 
+    /// 获取进程运行时间（times 系统调用）。
     pub async fn sys_times(&self, tms_ptr: UserBuf<TMS>) -> Result<usize, TaskError> {
         const CLK_TCK: u128 = 100;
         debug!("sys_times @ tms_ptr: {}", tms_ptr);
@@ -70,6 +77,7 @@ impl UserHandler {
         Ok(0)
     }
 
+    /// 获取系统信息（uname 系统调用）。
     pub async fn sys_uname(&self, buf_ptr: UserBuf<UTSname>) -> Result<usize, TaskError> {
         debug!("sys_uname @ uts_ptr: {}", buf_ptr);
 
@@ -95,5 +103,97 @@ impl UserHandler {
         buf_ptr.write(uts);
 
         Ok(0)
+    }
+
+    /// 获取用户 ID。
+    pub async fn sys_getuid(&self) -> Result<usize, TaskError> {
+        Ok(0)
+    }
+
+    /// 获取组 ID。
+    pub async fn sys_getgid(&self) -> Result<usize, TaskError> {
+        Ok(0)
+    }
+
+    /// 获取进程组 ID。
+    pub async fn sys_getpgid(&self) -> Result<usize, TaskError> {
+        Ok(0)
+    }
+
+    /// 设置进程组 ID。
+    pub async fn sys_setpgid(&self, _pid: usize, _pgid: usize) -> Result<usize, TaskError> {
+        Ok(0)
+    }
+
+    /// 获取时钟时间（clock_gettime 系统调用）。
+    pub async fn sys_clock_gettime(
+        &self,
+        clock_id: usize,
+        times_ptr: UserBuf<TimeSpec>,
+    ) -> Result<usize, TaskError> {
+        debug!(
+            "[task {:?}] sys_clock_gettime @ clock_id: {}, times_ptr: {}",
+            self.task.get_task_id(), clock_id, times_ptr
+        );
+
+        let ns = match clock_id {
+            0 => get_time(),        // CLOCK_REALTIME
+            1 => get_time(), // CLOCK_MONOTONIC
+            2 => {
+                error!("CLOCK_PROCESS_CPUTIME_ID not implemented");
+                Duration::ZERO
+            }
+            3 => {
+                error!("CLOCK_THREAD_CPUTIME_ID not implemented");
+                Duration::ZERO
+            }
+            _ => return Err(TaskError::EINVAL),
+        };
+
+        times_ptr.write(TimeSpec {
+            sec: ns.as_secs() as usize,
+            nsec: ns.subsec_nanos() as usize,
+        });
+        Ok(0)
+    }
+
+    /// 设置 robust_list（futex 相关）。
+    pub async fn sys_set_robust_list(&self, head_ptr: usize, len: usize) -> Result<usize, TaskError> {
+        debug!("sys_set_robust_list @ head_ptr: {:#x}, len: {}", head_ptr, len);
+        
+        // The robust_list_head structure size should be 24 bytes (3 pointers * 8 bytes each)
+        const ROBUST_LIST_HEAD_SIZE: usize = 24;
+        
+        // Check if the length matches the expected size
+        if len != ROBUST_LIST_HEAD_SIZE {
+            return Err(TaskError::EINVAL);
+        }
+        
+        // For now, we just validate the parameters and return success
+        // In a full implementation, we would store the robust list head pointer
+        // in the task's PCB for use with futex operations
+        
+        Ok(0)
+    }
+
+    /// 获取随机数（getrandom 系统调用）。
+    pub async fn sys_getrandom(
+        &self,
+        buf: UserBuf<u8>,
+        buflen: usize,
+        _flags: usize,
+    ) -> Result<usize, TaskError> {
+        use core::sync::atomic::{AtomicU64, Ordering};
+        static SEED: AtomicU64 = AtomicU64::new(0x1234_5678_9abc_def0);
+        let mut written = 0;
+        let mut buffer = buf.slice_mut_with_len(buflen);
+        for b in buffer.iter_mut() {
+            let old = SEED.load(Ordering::Relaxed);
+            let new = old.wrapping_mul(6364136223846793005).wrapping_add(1);
+            SEED.store(new, Ordering::Relaxed);
+            *b = (new & 0xFF) as u8;
+            written += 1;
+        }
+        Ok(written)
     }
 }

@@ -8,11 +8,19 @@ use crate::vfs::{DirEntry, FileAttr, FileSystem, FileType, Inode, VfsError};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use console::print;
+<<<<<<< HEAD
 
 /// /dev/uart 设备结构体。
+=======
+use console::riscv64::getch;
+use struct_define::poll_event::PollEvent;
+use spin::Mutex;
+
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
 #[derive(Debug)]
 pub struct UartDev {
     file_type: FileType,
+    buffer: Mutex<Vec<u8>>,
 }
 
 impl UartDev {
@@ -20,16 +28,25 @@ impl UartDev {
     pub fn new() -> Self {
         Self {
             file_type: FileType::CharDevice,
+            buffer: Mutex::new(Vec::new()),
         }
     }
 }
 
 impl Inode for UartDev {
+<<<<<<< HEAD
     /// 获取设备类型。
+=======
+    fn ioctl(&self, _command: usize, _arg: usize) -> VfsResult<usize> {
+        Ok(0)
+    }
+
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
     fn get_type(&self) -> VfsResult<FileType> {
         Ok(self.file_type)
     }
 
+<<<<<<< HEAD
     /// 读取未实现。
     fn read_at(&self, _offset: usize, _buf: &mut [u8]) -> VfsResult<usize> {
         // TODO: Implement actual UART read logic.
@@ -37,12 +54,44 @@ impl Inode for UartDev {
         unimplemented!("UART read_at is not yet implemented")
     }
     /// 写入数据到串口。
+=======
+    fn read_at(&self, _offset: usize, buf: &mut [u8]) -> VfsResult<usize> {
+        // 首先检查缓冲区中是否有数据
+        {
+            let mut buffer = self.buffer.lock();
+            if !buffer.is_empty() {
+                let to_read = core::cmp::min(buffer.len(), buf.len());
+                buf[..to_read].copy_from_slice(&buffer[..to_read]);
+                
+                // 从缓冲区移除已读数据
+                if to_read < buffer.len() {
+                    buffer.drain(0..to_read);
+                } else {
+                    buffer.clear();
+                }
+                
+                return Ok(to_read);
+            }
+        }
+        
+        // 如果缓冲区为空，尝试从 SBI 控制台读取
+        if let Some(ch) = getch() {
+            buf[0] = ch;
+            return Ok(1);
+        }
+        
+        // 没有数据可读，返回 EAGAIN
+        Err(VfsError::Again)
+    }
+
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
     fn write_at(&self, _offset: usize, buf: &[u8]) -> VfsResult<usize> {
-        // Write data to UART by printing each byte
+        // 写入数据到控制台
         for &byte in buf {
             print!("{}", byte as char);
         }
-        // Return the number of bytes written
+        
+        // 返回写入的字节数
         Ok(buf.len())
     }
 
@@ -108,4 +157,51 @@ impl Inode for UartDev {
             blocks: 0,
         })
     }
+
+    fn poll(&self, events: PollEvent) -> VfsResult<PollEvent> {
+        let mut revents = PollEvent::NONE;
+        
+        // 如果用户关心是否可写，标记为可写
+        if events.contains(PollEvent::OUT) || events.contains(PollEvent::WRNORM) {
+            revents.insert(PollEvent::OUT);
+        }
+        
+        // 检查是否有输入数据可读
+        if events.contains(PollEvent::IN) || events.contains(PollEvent::RDNORM) {
+            // 首先检查缓冲区是否有数据
+            let has_buffered_data = !self.buffer.lock().is_empty();
+            
+            if has_buffered_data {
+                revents.insert(PollEvent::IN);
+            } else {
+                // 如果缓冲区没有数据，使用更积极的 SBI 输入检测
+                // 先检查一次
+                if let Some(ch) = getch() {
+                    // 如果有输入，放入缓冲区而不是直接返回
+                    // 这样可以确保随后的 read_at 调用能够正确读取到数据
+                    self.buffer.lock().push(ch);
+                    revents.insert(PollEvent::IN);
+                } else {
+                    // 如果第一次检测没有输入，尝试更积极的检测
+                    // 用少量的自旋等待检测按键
+                    for _ in 0..3 {
+                        // 等待一小段时间再检测
+                        for _ in 0..500 {
+                            core::hint::spin_loop();
+                        }
+                        
+                        if let Some(ch) = getch() {
+                            self.buffer.lock().push(ch);
+                            revents.insert(PollEvent::IN);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(revents)
+    }
+
+
 }

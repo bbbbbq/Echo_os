@@ -2,6 +2,9 @@
 #![no_main]
 use arch::os_shut_down;
 use console::println;
+use mem::pagetable::PageTable;
+use memory_addr::VirtAddr;
+use page_table_multiarch::MappingFlags;
 use core::panic::PanicInfo;
 use core::sync::atomic::{AtomicBool, Ordering};
 use device::init_dt;
@@ -23,8 +26,12 @@ pub mod user_handler;
 use crate::executor::executor::{GLOBLE_EXECUTOR, info_task_queue, spawn_blank};
 use crate::executor::initproc::initproc;
 use boot::boot_page_table;
+<<<<<<< HEAD
 pub mod backtrace;
 use backtrace::backtrace;
+=======
+pub mod signal;
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
 
 //! Echo_os 内核主入口模块
 //!
@@ -74,9 +81,16 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
     trap::trap::init();
     init_dt(dtb);
     init_fs();
+<<<<<<< HEAD
 
     info!("\n\n\n\n\n\n");
     // test_ls();
+=======
+    // test_pagetable();
+    // loop{}
+    info!("\n\n\n\n\n\n");
+    //test_ls();
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
     spawn_blank(initproc());
     info_task_queue();
     GLOBLE_EXECUTOR.run();
@@ -91,6 +105,7 @@ pub extern "C" fn kernel_main(hartid: usize, dtb: usize) -> ! {
 /// test_ls();
 /// ```
 pub fn test_ls() {
+<<<<<<< HEAD
     let file = File::open(&"/".to_string(), OpenFlags::O_DIRECTORY | OpenFlags::O_RDWR).unwrap();
     let mut buffer = Vec::<DirEntry>::new();
     file.getdents(&mut buffer).unwrap();
@@ -98,4 +113,9 @@ pub fn test_ls() {
         println!("{}", entry.filename);
     }
     // os_shut_down();
+=======
+    let file = File::open(&"/.".to_string(), OpenFlags::O_DIRECTORY | OpenFlags::O_RDWR).unwrap();
+    info!("file: {:?}", file);
+    os_shut_down();
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
 }

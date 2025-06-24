@@ -58,6 +58,8 @@ pub const SYS_SIGPROCMASK: usize = 135;
 pub const SYS_SIGTIMEDWAIT: usize = 137;
 pub const SYS_SIGRETURN: usize = 139;
 pub const SYS_TIMES: usize = 153;
+pub const SYS_SETPGID: usize = 154;
+pub const SYS_GETPGID: usize = 155;
 pub const SYS_UNAME: usize = 160;
 pub const SYS_GETRUSAGE: usize = 165;
 pub const SYS_GETTIMEOFDAY: usize = 169;
@@ -80,6 +82,7 @@ pub const SYS_MSYNC: usize = 227;
 pub const SYS_WAIT4: usize = 260;
 pub const SYS_PRLIMIT64: usize = 261;
 pub const SYS_RENAMEAT2: usize = 276;
+<<<<<<< HEAD
 
 
 
@@ -145,3 +148,6 @@ pub fn sysnum_to_string(sys_num: usize) -> String {
         _ => "UNKNOWN".into(),
     }
 }
+=======
+pub const SYS_GETRANDOM: usize = 278;
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d

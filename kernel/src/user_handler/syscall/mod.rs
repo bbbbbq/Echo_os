@@ -1,14 +1,19 @@
 use super::handler::UserHandler;
 use super::handler::UserTaskControlFlow;
 use log::debug;
+use struct_define::iov::IoVec;
+use struct_define::poll_event::PollFd;
 use struct_define::tms::TMS;
 use struct_define::uname::UTSname;
+use struct_define::rlimit::Rlimit;
 use trap::trap::EscapeReason;
 use trap::trap::run_user_task;
 use trap::trapframe::{TrapFrame, TrapFrameArgs};
 pub mod sysnum;
 use crate::executor::error::TaskError;
 use crate::executor::task::AsyncTask;
+use crate::signal::flages::SigAction;
+use crate::signal::SigProcMask;
 use crate::user_handler::syscall::other::TimeVal;
 use crate::user_handler::syscall::sysnum::sysnum_to_string;
 use crate::user_handler::userbuf::UserBuf;
@@ -20,8 +25,20 @@ pub mod mem;
 pub mod proc;
 pub mod other;
 use struct_define::timespec::TimeSpec;
+pub mod signal;
 
+//!
+//! 系统调用分发与处理模块。
+//!
+//! 提供 handle_syscall、syscall 入口及各类系统调用分发。
 impl UserHandler {
+    /// 处理一次系统调用 trap。
+    ///
+    /// # 参数
+    /// - `cx_ref`: 当前 TrapFrame
+    ///
+    /// # 返回值
+    /// 返回 [`UserTaskControlFlow`]，指示任务调度流。
     pub async fn handle_syscall(&mut self, cx_ref: &mut TrapFrame) -> UserTaskControlFlow {
         //debug!("TrapFrame: {:?}", cx_ref);
 
@@ -51,6 +68,14 @@ impl UserHandler {
         UserTaskControlFlow::Continue
     }
 
+    /// 根据系统调用号分发到具体实现。
+    ///
+    /// # 参数
+    /// - `call_id`: 系统调用号
+    /// - `_args`: 参数数组
+    ///
+    /// # 返回值
+    /// 返回系统调用执行结果。
     pub async fn syscall(&mut self, call_id: usize, _args: [usize; 6]) -> Result<usize, TaskError> {
         info!(" \n\n [syscall] id: {:x} {:?} , args: {:x?} ", call_id,sysnum_to_string(call_id), _args);
         match call_id {
@@ -78,8 +103,29 @@ impl UserHandler {
                     .await
                     .map(|x| x as usize)
             }
+            sysnum::SYS_GETPGID => {
+                self.sys_getpgid().await
+            }
+            sysnum::SYS_GETEUID => {
+                self.sys_geteuid().await
+            }
+            sysnum::SYS_SETPGID => {
+                self.sys_setpgid(_args[0] as usize, _args[1] as usize).await
+            }
+            sysnum::SYS_SIGACTION => {
+                let sig = _args[0];
+                let act = UserBuf::new(_args[1] as *mut SigAction);
+                let oldact = UserBuf::new(_args[2] as *mut SigAction);
+                self.sys_sigaction(sig, act, oldact).await
+            }
+            sysnum::SYS_SIGPROCMASK => {
+                let how = _args[0];
+                let set = UserBuf::new(_args[1] as *mut SigProcMask);
+                let oldset = UserBuf::new(_args[2] as *mut SigProcMask);
+                self.sys_sigprocmask(how, set, oldset).await
+            }
             sysnum::SYS_GETCWD => {
-                let buf_ptr = _args[0].into();
+                let buf_ptr = UserBuf::new(_args[0] as *mut u8);
                 let size = _args[1];
                 self.sys_getcwd(buf_ptr, size).await
             }
@@ -142,6 +188,18 @@ impl UserHandler {
                 let mount_flags = _args[3];
                 let data = UserBuf::new(_args[4] as *mut u8);
                 self.sys_mount(source, target, filesystem_type, mount_flags, data).await
+            }
+            sysnum::SYS_WRITEV => {
+                let fd = _args[0];
+                let iov = UserBuf::new(_args[1] as *mut IoVec);
+                let iocnt = _args[2];
+                self.sys_writev(fd, iov, iocnt).await
+            }
+            sysnum::SYS_FCNTL => {
+                let fd = _args[0];
+                let cmd = _args[1];
+                let arg = _args[2];
+                self.sys_fcntl(fd, cmd, arg).await
             }
             sysnum::SYS_UMOUNT2 => {
                 let target = UserBuf::new(_args[0] as *mut u8);
@@ -219,6 +277,38 @@ impl UserHandler {
             sysnum::SYS_EXIT_GROUP => {
                 let exit_code = _args[0];
                 self.sys_exit_group(exit_code).await
+            }
+            sysnum::SYS_PPOLL => {
+                let poll_fds_ptr = UserBuf::new(_args[0] as *mut PollFd);
+                let nfds = _args[1];
+                let timeout_ptr = UserBuf::new(_args[2] as *mut TimeSpec);
+                let sigmask_ptr = _args[3];
+                self.sys_ppoll(poll_fds_ptr, nfds, timeout_ptr, sigmask_ptr).await
+            }
+            sysnum::SYS_SET_ROBUST_LIST => {
+                let head_ptr = _args[0];
+                let len = _args[1];
+                self.sys_set_robust_list(head_ptr, len).await
+            }
+            sysnum::SYS_PRLIMIT64 => {
+                let pid = _args[0];
+                let resource = _args[1];
+                let new_limit = UserBuf::new(_args[2] as *mut Rlimit);
+                let old_limit = UserBuf::new(_args[3] as *mut Rlimit);
+                self.sys_prlimit64(pid, resource, new_limit, old_limit).await
+            }
+            sysnum::SYS_READLINKAT => {
+                let dirfd = _args[0] as isize;
+                let pathname = UserBuf::new(_args[1] as *mut u8);
+                let buf = UserBuf::new(_args[2] as *mut u8);
+                let bufsiz = _args[3];
+                self.sys_readlinkat(dirfd, pathname, buf, bufsiz).await
+            }
+            sysnum::SYS_GETRANDOM => {
+                let buf = UserBuf::new(_args[0] as *mut u8);
+                let buflen = _args[1];
+                let flags = _args[2];
+                self.sys_getrandom(buf, buflen, flags).await
             }
             _ => {
                 info!("call_id : {}", call_id);

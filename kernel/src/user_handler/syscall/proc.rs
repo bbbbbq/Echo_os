@@ -1,5 +1,6 @@
 use crate::executor::error::TaskError;
 use crate::executor::ops::yield_now;
+use crate::signal::flages::SignalFlags;
 use crate::user_handler::handler::UserHandler;
 use log::{debug, warn};
 use struct_define::timespec::TimeSpec;
@@ -7,7 +8,7 @@ use timer::get_time;
 use crate::executor::task::{AsyncTask, CloneFlags};
 use crate::user_handler::userbuf::UserBuf;
 use crate::executor::task::AsyncTaskItem;
-use crate::executor::executor::add_ready_task;
+use crate::executor::executor::{add_ready_task, tid2task};
 use crate::user_handler::entry::user_entry;
 use crate::executor::sync::WaitPid;
 use trap::trapframe::TrapFrameArgs;
@@ -15,8 +16,15 @@ use crate::executor::id_alloc::TaskId;
 use alloc::string::String;
 use alloc::vec::Vec;
 use filesystem::path::Path;
-use crate::executor::thread::add_user_task;
+use crate::executor::thread::{add_user_task, UserTask};
+use struct_define::rlimit::Rlimit;
+
+//!
+//! 进程管理相关系统调用实现。
+//!
+//! 提供 exit/clone/wait4/execve/getpid/getppid/sched_yield/set_tid_address/exit_group/kill/prlimit64 等。
 impl UserHandler {
+    /// 进程退出（exit 系统调用）。
     pub async fn sys_exit(&self, exit_code: isize) -> Result<usize, TaskError> {
         debug!(
             "sys_exit @ exit_code: {}  task_id: {:?}",
@@ -26,6 +34,7 @@ impl UserHandler {
         Ok(0)
     }
 
+    /// 进程/线程克隆（clone 系统调用）。
     pub async fn sys_clone(
         &self,
         flags: usize,
@@ -65,6 +74,7 @@ impl UserHandler {
         Ok(new_task_id.0)
     }
 
+    /// 等待子进程退出（wait4 系统调用）。
     pub async fn sys_wait4(
         &self,
         pid: isize,           // 指定进程ID，可为-1等待任何子进程；
@@ -151,6 +161,7 @@ impl UserHandler {
         }
     }
 
+    /// 执行新程序（execve 系统调用）。
     pub async fn sys_execve(
         &self,
         filename: UserBuf<u8>,      // *mut i8
@@ -194,11 +205,12 @@ impl UserHandler {
     }
 
 
-    /// sys_getpid() 获取进程 id
+    /// 获取进程 ID。
     pub async fn sys_getpid(&self) -> Result<usize, TaskError> {
         Ok(self.task.process_id.0)
     }
 
+    /// 获取父进程 ID。
     pub async fn sys_getppid(&self) -> Result<usize, TaskError> {
         match self.task.parent.read().upgrade() {
             Some(parent) => Ok(parent.process_id.0),
@@ -206,12 +218,14 @@ impl UserHandler {
         }
     }
 
+    /// 主动让出 CPU（sched_yield 系统调用）。
     pub async fn sys_sched_yield(&self) -> Result<usize, TaskError> {
         debug!("sys_sched_yield @ ");
         yield_now().await;
         Ok(0)
     }
 
+    /// 设置线程退出时清理的地址。
     pub async fn sys_set_tid_address(&self, tid_address: UserBuf<u32>) -> Result<usize, TaskError> {
         debug!("sys_set_tid_address @ tid_address: {:?}", tid_address);
         let tid_address = tid_address.read();
@@ -219,7 +233,15 @@ impl UserHandler {
         Ok(self.tid.0)
     }
 
-    pub async fn sys_getuid(&self) -> Result<usize, TaskError> {
+    /// 进程组退出（exit_group 系统调用）。
+    pub async fn sys_exit_group(&self, exit_code: isize) -> Result<usize, TaskError> {
+        debug!("sys_exit_group @ exit_code: {}", exit_code);
+        self.task.thread_exit(exit_code as _);
+        Ok(0)
+    }
+
+    /// 获取有效用户 ID。
+    pub async fn sys_geteuid(&self) -> Result<usize, TaskError> {
         Ok(0)
     }
 
@@ -252,9 +274,107 @@ impl UserHandler {
         Ok(0)
     }
 
-    pub async fn sys_exit_group(&self, exit_code: usize) -> Result<usize, TaskError> {
-        debug!("sys_exit_group @ exit_code: {}", exit_code);
-        self.task.exit_group(exit_code);
+    /// 设置/获取资源限制（prlimit64 系统调用）。
+    pub async fn sys_prlimit64(
+        &self,
+        pid: usize,
+        resource: usize,
+        new_limit: UserBuf<Rlimit>,
+        old_limit: UserBuf<Rlimit>,
+    ) -> Result<usize, TaskError> {
+        debug!(
+            "sys_prlimit64 @ pid: {}, resource: {}, new_limit: {:?}, old_limit: {:?}",
+            pid, resource, new_limit, old_limit
+        );
+
+        // Resource limit constants (from Linux)
+        const RLIMIT_CPU: usize = 0;
+        const RLIMIT_FSIZE: usize = 1;
+        const RLIMIT_DATA: usize = 2;
+        const RLIMIT_STACK: usize = 3;
+        const RLIMIT_CORE: usize = 4;
+        const RLIMIT_RSS: usize = 5;
+        const RLIMIT_NPROC: usize = 6;
+        const RLIMIT_NOFILE: usize = 7;
+        const RLIMIT_MEMLOCK: usize = 8;
+        const RLIMIT_AS: usize = 9;
+        const RLIMIT_LOCKS: usize = 10;
+        const RLIMIT_SIGPENDING: usize = 11;
+        const RLIMIT_MSGQUEUE: usize = 12;
+        const RLIMIT_NICE: usize = 13;
+        const RLIMIT_RTPRIO: usize = 14;
+        const RLIMIT_RTTIME: usize = 15;
+
+        // Check if resource is valid
+        if resource > RLIMIT_RTTIME {
+            return Err(TaskError::EINVAL);
+        }
+
+        // For now, we only support getting/setting limits for the current process (pid = 0)
+        if pid != 0 {
+            return Err(TaskError::EINVAL);
+        }
+
+        // Default limits (simplified implementation)
+        let default_limits = match resource {
+            RLIMIT_CPU => Rlimit { curr: usize::MAX, max: usize::MAX },
+            RLIMIT_FSIZE => Rlimit { curr: usize::MAX, max: usize::MAX },
+            RLIMIT_DATA => Rlimit { curr: usize::MAX, max: usize::MAX },
+            RLIMIT_STACK => Rlimit { curr: 8 * 1024 * 1024, max: usize::MAX }, // 8MB stack
+            RLIMIT_CORE => Rlimit { curr: 0, max: usize::MAX },
+            RLIMIT_RSS => Rlimit { curr: usize::MAX, max: usize::MAX },
+            RLIMIT_NPROC => Rlimit { curr: 1024, max: 1024 },
+            RLIMIT_NOFILE => Rlimit { curr: 1024, max: 1024 },
+            RLIMIT_MEMLOCK => Rlimit { curr: usize::MAX, max: usize::MAX },
+            RLIMIT_AS => Rlimit { curr: usize::MAX, max: usize::MAX },
+            RLIMIT_LOCKS => Rlimit { curr: usize::MAX, max: usize::MAX },
+            RLIMIT_SIGPENDING => Rlimit { curr: 1024, max: 1024 },
+            RLIMIT_MSGQUEUE => Rlimit { curr: 819200, max: 819200 },
+            RLIMIT_NICE => Rlimit { curr: 0, max: 0 },
+            RLIMIT_RTPRIO => Rlimit { curr: 0, max: 0 },
+            RLIMIT_RTTIME => Rlimit { curr: usize::MAX, max: usize::MAX },
+            _ => return Err(TaskError::EINVAL),
+        };
+
+        // If old_limit is valid, write current limits
+        if old_limit.is_valid() {
+            old_limit.write(default_limits);
+        }
+
+        // If new_limit is valid, we would set the limits here
+        // For now, we just validate the input but don't actually change limits
+        if new_limit.is_valid() {
+            let new_limits = new_limit.read();
+            
+            // Basic validation: current limit should not exceed maximum limit
+            if new_limits.curr > new_limits.max {
+                return Err(TaskError::EINVAL);
+            }
+            
+            // TODO: Actually implement limit setting and enforcement
+            // This would require storing limits in the task's PCB
+        }
+
+        Ok(0)
+    }
+
+    /// 向进程发送信号（kill 系统调用）。
+    pub async fn sys_kill(&self, pid: usize, signum: usize) -> Result<usize, TaskError> {
+        let signal = SignalFlags::from_num(signum);
+        debug!(
+            "[task {:?}] sys_kill @ pid: {}, signum: {:?}",
+            self.task.get_task_id(), pid, signal
+        );
+
+        let user_task = match tid2task(TaskId(pid)) {
+            Some(task) => task.downcast_arc::<UserTask>().map_err(|_| TaskError::ESRCH),
+            None => Err(TaskError::ESRCH),
+        }?;
+
+        user_task.tcb.write().signal.add_signal(signal.clone());
+
+        yield_now().await;
+
         Ok(0)
     }
 }

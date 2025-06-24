@@ -15,8 +15,16 @@ Cargo.lock
 *.md
 # Debug files
 qemu.log
+<<<<<<< HEAD
 test_mount
 *.log
+=======
+*.log
+
+# test mount
+test_mount
+
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
 # IDE specific files
 .vscode/*
 !.vscode/settings.json
@@ -24,5 +32,7 @@ test_mount
 *.swp
 *.swo
 .cargo
-
+*.log
+test_tmp
+test
 mount_point

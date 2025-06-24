@@ -73,3 +73,9 @@ pub fn get_time() -> Duration {
 pub fn get_clock_freq() -> u64 {
     CLOCK_FREQ
 }
+
+
+pub fn current_nsec() -> usize {
+    let duration = get_time();
+    (duration.as_secs() as usize) * 1_000_000_000 + (duration.subsec_nanos() as usize)
+}

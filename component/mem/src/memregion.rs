@@ -9,9 +9,14 @@ use super::pagetable::PageTable;
 use alloc::vec::Vec;
 use frame::FrameTracer;
 
+<<<<<<< HEAD
 /// 内存区域类型。
 #[derive(Debug,Clone, Copy)]
+=======
+#[derive(Debug,Clone, Copy,PartialEq)]
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
 pub enum MemRegionType {
+    ELF,
     Text,
     BSS,
     RODATA,

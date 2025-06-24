@@ -42,9 +42,14 @@ impl FdTable {
         Self { table }
     }
 
+<<<<<<< HEAD
     /// 获取指定fd的文件对象。
     pub fn get(&self, fd: usize) -> Option<&File> {
         self.table.get(&fd)
+=======
+    pub fn get(&self, fd: usize) -> Option<File> {
+        self.table.get(&fd).cloned()
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
     }
 
     /// 插入或替换fd对应的文件对象。

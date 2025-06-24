@@ -23,7 +23,13 @@ impl Path {
         Self { inner: parts }
     }
 
+<<<<<<< HEAD
     /// 获取路径各层级的字符串数组。
+=======
+    pub fn new_empty() -> Self {
+        Self { inner: Vec::new() }
+    }
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
     pub fn get_inner(&self) -> Vec<String> {
         self.inner.clone()
     }

@@ -1,7 +1,10 @@
+<<<<<<< HEAD
 //! 页表模块
 //!
 //! 按不同架构导出对应实现。
 
+=======
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
 #[cfg(target_arch = "riscv64")]
 mod riscv64;
 #[cfg(target_arch = "riscv64")]

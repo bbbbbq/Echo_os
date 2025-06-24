@@ -9,8 +9,12 @@ use super::memregion::MemRegion;
 use alloc::vec::Vec;
 use memory_addr::{VirtAddr, align_up};
 
+<<<<<<< HEAD
 /// 内存区域集合。
 #[derive(Clone, Debug)]
+=======
+#[derive(Clone)]
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
 pub struct MemSet {
     pub regions: Vec<MemRegion>,
 }
@@ -18,8 +22,18 @@ pub struct MemSet {
 impl core::fmt::Display for MemSet {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         writeln!(f, "MemSet {{")?;
-        for region in &self.regions {
-            writeln!(f, "{}", region)?;
+        for (i, region) in self.regions.iter().enumerate() {
+            writeln!(f, "Region {}: {}", i, region)?;
+        }
+        write!(f, "}}")
+    }
+}
+
+impl core::fmt::Debug for MemSet {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        writeln!(f, "MemSet {{")?;
+        for (i, region) in self.regions.iter().enumerate() {
+            writeln!(f, "Region {}: {:?}", i, region)?;
         }
         write!(f, "}}")
     }

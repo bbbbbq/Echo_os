@@ -1,28 +1,38 @@
+use core::cmp;
+
+use crate::alloc::string::{String, ToString};
 use crate::executor::error::TaskError;
-use crate::executor::ops::yield_now;
-use filesystem::vfs::VfsError;
-use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
-use struct_define::fd::FcntlCmd;
+use crate::executor::ops::{yield_now, sleep_for_duration, terminal_wait};
+use filesystem::devfs::devfs::{DevFsDirInode, DevType};
+use filesystem::file::{File, OpenFlags, Stat};
+use filesystem::mount::{mount_inode, umount_fs};
+use filesystem::path::Path;
+use filesystem::pipe::create_pipe;
+use filesystem::vfs::{DirEntry, FileAttr, FileType, VfsError};
+use log::{debug, info};
+use memory_addr::VirtAddr;
+use struct_define::iov::IoVec;
+use struct_define::poll_event::{PollEvent, PollFd};
+use struct_define::termios::{Termios, Winsize, TCGETS, TCSETS, TCSETSW, TCSETSF, TIOCGWINSZ, TIOCSPGRP, TIOCGPGRP};
+use struct_define::timespec::TimeSpec;
 use crate::user_handler::handler::UserHandler;
 use crate::user_handler::userbuf::UserBuf;
-use alloc::string::ToString;
-use alloc::sync::{self, Arc};
+use timer::current_nsec;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use filesystem::devfs::{DevFsDirInode, DevType};
-use filesystem::file::OpenFlags;
-use filesystem::file::{File, Stat};
-use filesystem::mount::{mount_inode, umount_fs};
-use filesystem::path::{self, Path};
-use filesystem::pipe::create_pipe;
-use filesystem::vfs::{DirEntry, FileType};
-use log::debug;
-
-use memory_addr::VirtAddr;
 const AT_FDCWD: isize = -100;
 
 impl UserHandler {
+    /// 写文件。
+    ///
+    /// # 参数
+    /// - `fd`: 文件描述符
+    /// - `buf_ptr`: 用户空间缓冲区指针
+    /// - `count`: 写入字节数
+    ///
+    /// # 返回值
+    /// 返回实际写入的字节数。
     pub async fn sys_write(
         &self,
         fd: usize,
@@ -40,6 +50,12 @@ impl UserHandler {
         Ok(result)
     }
 
+    /// 创建目录。
+    ///
+    /// # 参数
+    /// - `dirfd`: 目录文件描述符
+    /// - `path_str`: 目录路径
+    /// - `_mode`: 模式
     pub async fn sys_mkdirat(
         &mut self,
         dirfd: isize,
@@ -57,13 +73,14 @@ impl UserHandler {
             let path = task.pcb.lock().curr_dir.to_string();
             cwd = File::open(&path, OpenFlags::O_DIRECTORY | OpenFlags::O_RDWR)?;
         } else {
-            cwd = self.task.get_fd(dirfd as usize).expect("invalid dirfd");
+            cwd = self.task.get_fd(dirfd as usize).expect("invalid dirfd").into();
         }
         cwd.mkdir_at(path_str)?;
         //test_ls();
         Ok(0)
     }
 
+    /// 关闭文件。
     pub async fn sys_close(&mut self, fd: usize) -> Result<usize, TaskError> {
         debug!("sys_close @ fd: {}", fd);
         self.task.pcb.lock().fd_table.close(fd);
@@ -71,6 +88,7 @@ impl UserHandler {
         Ok(0)
     }
 
+    /// 切换当前工作目录。
     pub async fn sys_chdir(&mut self, path: &str) -> Result<usize, TaskError> {
         debug!("sys_chdir @ path: {}", path);
         self.task.pcb.lock().curr_dir = Path::new(path.to_string()).into();
@@ -78,28 +96,20 @@ impl UserHandler {
         Ok(0)
     }
 
-    pub async fn sys_getcwd(&mut self, buf_ptr: VirtAddr, size: usize) -> Result<usize, TaskError> {
-        debug!("sys_getcwd @ buf_ptr: {:?}, size: {}", buf_ptr, size);
-        let buffer = unsafe { core::slice::from_raw_parts_mut(buf_ptr.as_mut_ptr(), size) };
-        let cwd_path = self.task.pcb.lock().curr_dir.to_string();
-        let cwd_bytes = cwd_path.as_bytes();
-
-        debug!("sys_getcwd: path={}", cwd_path);
-
-        if cwd_bytes.len() + 1 > size {
-            // Not enough space in user buffer, including null terminator.
-            debug!("sys_getcwd failed: buffer too small");
-            return Err(TaskError::EINVAL);
-        }
-
-        let copy_len = cwd_bytes.len();
-        buffer[..copy_len].copy_from_slice(cwd_bytes);
-        buffer[copy_len] = 0; // Null terminate the string.
-
-        debug!("sys_getcwd success: copied {} bytes", copy_len + 1);
-        Ok(copy_len + 1)
+    /// 获取当前工作目录。
+    pub async fn sys_getcwd(&self, buf_ptr: UserBuf<u8>, size: usize) -> Result<usize, TaskError> {
+        debug!("sys_getcwd @ buffer_ptr{} size: {}", buf_ptr, size);
+        let buffer = buf_ptr.slice_mut_with_len(size);
+        let curr_path = self.task.pcb.lock().curr_dir.clone();
+        let path = curr_path.to_string();
+        let bytes = path.as_bytes();
+        let len = cmp::min(bytes.len(), size);
+        buffer[..len].copy_from_slice(&bytes[..len]);
+        buffer[len..].fill(0);
+        Ok(buf_ptr.into())
     }
 
+    /// 打开文件。
     pub async fn sys_openat(
         &self,
         dirfd: usize,
@@ -107,35 +117,27 @@ impl UserHandler {
         flags: usize,
         mode: usize,
     ) -> Result<isize, TaskError> {
-        // debug!("sys_openat @ dirfd: {}, filename_ptr: {:?}, flags: {}, mode: {}", dirfd, filename_ptr, flags, mode);
         let filename = filename_ptr.read_string();
-        let flags = OpenFlags::from_bits_truncate(flags);
-        let mode = mode as u32;
-        debug!(
-            "sys_openat @ dirfd: {}, filename: {}, flags: {:?}, mode: {}",
-            dirfd, filename, flags, mode
-        );
-        let cwd = if dirfd as isize == -100 {
-            File::open(
-                &self.task.pcb.lock().curr_dir.to_string(),
-                OpenFlags::O_DIRECTORY | OpenFlags::O_RDWR,
-            )?
-        } else {
-            self.task.get_fd(dirfd).ok_or(TaskError::EBADF)?
-        };
-        // Remove leading dot if present in filename, but only if it's not just a single dot
-        let filename = if filename.starts_with('.') && filename != "." {
-            filename.strip_prefix('.').unwrap_or(&filename).to_string()
+        let filename = if filename.starts_with("./") {
+            filename[2..].to_string()
         } else {
             filename
         };
-
-        let file = cwd.open_at(&filename, flags)?;
+        let flags = OpenFlags::from_bits_truncate(flags);
+        let mode = mode as u32;
+        debug!("sys_openat @ dirfd: {}, filename: {}, flags: {:?}, mode: {}", dirfd, filename, flags, mode);
+        let dir_file = if dirfd as isize == -100 {
+            self.task.get_cwd()
+        } else {
+            self.task.get_fd(dirfd).ok_or(TaskError::EBADF)?
+        };
+        let full_path = dir_file.path.join(&filename);
+        let file = File::open(full_path.to_string(), flags)?;
         let fd = self.task.pcb.lock().fd_table.alloc(file);
-        // test_ls();
         Ok(fd as isize)
     }
 
+    /// 文件描述符重定向（dup3）。
     pub async fn sys_dup3(&self, fd_src: usize, fd_dst: usize) -> Result<usize, TaskError> {
         debug!("sys_dup3 @ fd_src: {}, fd_dst: {}", fd_src, fd_dst);
         let file = self.task.get_fd(fd_src).ok_or(TaskError::EBADF)?;
@@ -143,6 +145,7 @@ impl UserHandler {
         Ok(fd_dst)
     }
 
+    /// 文件描述符重定向（dup）。
     pub async fn sys_dup(&self, fd: usize) -> Result<usize, TaskError> {
         debug!("sys_dup @ fd: {}", fd);
         let file = self.task.get_fd(fd).ok_or(TaskError::EBADF)?;
@@ -150,6 +153,7 @@ impl UserHandler {
         Ok(fd_dst)
     }
 
+    /// 获取文件状态。
     pub async fn sys_fstat(&self, fd: usize, stat_ptr: UserBuf<Stat>) -> Result<isize, TaskError> {
         debug!("sys_fstat @ fd: {} stat_ptr: {:?}", fd, stat_ptr);
 
@@ -161,87 +165,20 @@ impl UserHandler {
         Ok(0)
     }
 
-    pub async fn sys_getdents64(
-        &self,
-        fd: usize,
-        buf_ptr: UserBuf<u8>,
-        len: usize, // Max length of user-space buffer
-    ) -> Result<usize, TaskError> {
+    /// 读取目录项。
+    pub async fn sys_getdents64(&self, fd: usize, buf_ptr: UserBuf<u8>, len: usize) -> Result<usize, TaskError> {
         debug!(
-            "sys_getdents64 @ fd: {}, user_buf_ptr: {:?}, user_buf_len: {}",
-            fd, buf_ptr, len
+            "[task {:?}] sys_getdents64 @ fd: {}, buf_ptr: {}, len: {}",
+            self.tid, fd, buf_ptr, len
         );
 
-        let file = self.task.get_fd(fd).ok_or(TaskError::EBADF)?;
+        let mut file = self.task.get_fd(fd).unwrap();
 
-        let mut dir_entries: Vec<DirEntry> = Vec::new();
-        // file.getdents now populates dir_entries and returns the count of entries read.
-        // We don't strictly need the count here as we'll iterate over dir_entries.
-        let _num_entries = file.getdents(&mut dir_entries)?;
-
-        let mut user_output_bytes: Vec<u8> = Vec::with_capacity(len);
-        let mut current_total_bytes_in_user_output = 0;
-
-        for entry in dir_entries {
-            let name_bytes = entry.filename.as_bytes(); // Changed: d_name -> filename
-            let name_len = name_bytes.len();
-
-            // struct linux_dirent64 {
-            //   d_ino (u64): 8 bytes
-            //   d_off (i64): 8 bytes
-            //   d_reclen (u16): 2 bytes
-            //   d_type (u8): 1 byte
-            //   d_name[]: name_len + 1 (for null terminator)
-            // }
-            let fixed_part_size = 8 + 8 + 2 + 1; // 19 bytes
-            let d_reclen_unaligned = fixed_part_size + name_len + 1; // +1 for null terminator
-            let d_reclen_aligned = (d_reclen_unaligned + 7) & !7; // Align to 8 bytes
-
-            if current_total_bytes_in_user_output + d_reclen_aligned > len {
-                // Not enough space in user buffer for this entry
-                break;
-            }
-
-            // d_ino - Placeholder, as DirEntry doesn't store inode number directly
-            let d_ino_val: u64 = 1; // Placeholder for inode number, as DirEntry doesn't store it.
-            user_output_bytes.extend_from_slice(&d_ino_val.to_ne_bytes());
-
-            // d_off: Offset of the next dirent structure. Here, it's the offset after this one.
-            let d_off = (current_total_bytes_in_user_output + d_reclen_aligned) as i64;
-            user_output_bytes.extend_from_slice(&d_off.to_ne_bytes());
-
-            // d_reclen
-            user_output_bytes.extend_from_slice(&(d_reclen_aligned as u16).to_ne_bytes());
-
-            // d_type
-            let dt_type: u8 = match entry.file_type {
-                // Changed: d_type -> file_type
-                FileType::File => 8,      // DT_REG
-                FileType::Directory => 4, // DT_DIR
-                _ => 0,                   // DT_UNKNOWN
-            };
-            user_output_bytes.push(dt_type);
-
-            // d_name (with null terminator)
-            user_output_bytes.extend_from_slice(name_bytes);
-            user_output_bytes.push(0); // Null terminator
-
-            // Padding to d_reclen_aligned
-            let current_entry_len = fixed_part_size + name_len + 1;
-            if d_reclen_aligned > current_entry_len {
-                user_output_bytes.resize(current_total_bytes_in_user_output + d_reclen_aligned, 0);
-            }
-
-            current_total_bytes_in_user_output += d_reclen_aligned;
-        }
-
-        if !user_output_bytes.is_empty() {
-            buf_ptr.write_slice(&user_output_bytes); // Changed: Removed ? operator
-        }
-
-        Ok(current_total_bytes_in_user_output)
+        let buffer = buf_ptr.slice_mut_with_len(len);
+        Ok(file.getdents(buffer)?)
     }
 
+    /// 读文件。
     pub async fn sys_read(
         &self,
         fd: usize,
@@ -262,6 +199,7 @@ impl UserHandler {
         }
     }
 
+    /// 创建管道。
     pub async fn sys_pipe2(
         &self,
         fds_ptr: UserBuf<u32>,
@@ -284,6 +222,7 @@ impl UserHandler {
         Ok(0)
     }
 
+    /// 删除文件或目录。
     pub async fn sys_unlinkat(
         &self,
         dir_fd: isize,
@@ -316,7 +255,8 @@ impl UserHandler {
         Ok(0)
     }
 
-        pub async fn sys_mount(
+    /// 挂载文件系统。
+    pub async fn sys_mount(
         &self,
         source: UserBuf<u8>,
         target: UserBuf<u8>,
@@ -348,6 +288,7 @@ impl UserHandler {
         Ok(0)
     }
 
+    /// 卸载文件系统。
     pub async fn sys_umount(&self, target: UserBuf<u8>) -> Result<usize, TaskError> {
         let target_str = target.read_string();
         let path = Path::from(target_str);
@@ -355,6 +296,7 @@ impl UserHandler {
         Ok(0)
     }
 
+    /// 检查文件访问权限。
     pub async fn sys_faccessat(&self, dirfd: isize, pathname: UserBuf<u8>, mode: usize, flags: usize) -> Result<usize, TaskError>
     {
         // let cwd;
@@ -368,16 +310,18 @@ impl UserHandler {
         Ok(0)
     }
 
+    /// 文件 IO 控制。
     pub async fn sys_ioctl(
         &self,
         _fd: u32,          // 文件描述符
-        _cmd: u32,         // 控制命令（如 Linux 的 `TIOCGWINSZ` 获取终端大小）
-        _arg: usize,       // 可选参数（可能是用户态缓冲区地址或直接值）
+        _cmd: u32,         // 控制命令
+        _arg: usize,       // 可选参数
     ) -> Result<usize, TaskError>
     {
         Ok(0)
     }
 
+    /// 获取文件状态（带路径）。
     pub async fn sys_fstatat(&self, dirfd: isize, pathname: UserBuf<u8>, statbuf: UserBuf<u8>,flags: usize) -> Result<usize, TaskError>
     {
         debug!("sys_fstatat @ dirfd: {}, pathname: {}, statbuf: {}, flags: {}", dirfd, pathname, statbuf, flags);
@@ -403,6 +347,7 @@ impl UserHandler {
         Ok(0)
     }
 
+    /// 文件描述符控制。
     pub async fn sys_fcntl(&self, fd: usize, cmd: usize, arg: usize) -> Result<usize, TaskError> {
         debug!(
             "[task {:?}] fcntl: fd: {}, cmd: {:#x}, arg: {}",
@@ -423,5 +368,201 @@ impl UserHandler {
         //     _ => Ok(0),
         // }
         Ok(0)
+    }
+
+    pub async fn sys_writev(&self, fd: usize, iov: UserBuf<IoVec>, iocnt: usize) -> Result<usize, TaskError> {
+        debug!("sys_writev @ fd: {}, iov: {}, iocnt: {}", fd, iov, iocnt);
+        
+        if !iov.is_valid() || iocnt == 0 {
+            return Ok(0);
+        }
+        
+        let mut wsize = 0;
+        let iov = iov.slice_mut_with_len(iocnt);
+        let mut file = self.task.get_fd(fd).ok_or(TaskError::EBADF)?;
+
+        for io in iov {
+            if io.base == 0 || io.len == 0 {
+                continue;
+            }
+            let user_buf = UserBuf::<u8>::new(io.base as *mut u8);
+            let buffer = user_buf.slice_mut_with_len(io.len);
+            wsize += file.write(buffer)?;
+        }
+
+        Ok(wsize)
+    }
+
+    /// 优化后的 ppoll 实现，提高终端响应性
+    pub async fn sys_ppoll(
+        &self,
+        poll_fds_ptr: UserBuf<PollFd>,
+        nfds: usize,
+        timeout_ptr: UserBuf<TimeSpec>,
+        sigmask_ptr: usize,
+    ) -> Result<usize, TaskError> {
+        debug!(
+            "sys_ppoll @ poll_fds_ptr: {}, nfds: {}, timeout_ptr: {}, sigmask_ptr: {:#X}",
+            poll_fds_ptr, nfds, timeout_ptr, sigmask_ptr
+        );
+        
+        // 检查参数有效性
+        if nfds == 0 {
+            return Ok(0);
+        }
+        
+        let poll_fds = poll_fds_ptr.slice_mut_with_len(nfds);
+        
+        // 计算超时时间
+        let (has_timeout, timeout_ns) = if timeout_ptr.is_valid() {
+            let ts = timeout_ptr.get_ref();
+            (true, ts.to_nsec())
+        } else {
+            (false, usize::MAX) // 无超时
+        };
+        
+        // 设置结束时间
+        let etime = if has_timeout {
+            current_nsec() + timeout_ns
+        } else {
+            usize::MAX
+        };
+        
+        // 对于终端的轮询，可以采取更主动的检测方式
+        // 检查是否在监听终端输入
+        let is_terminal_poll = nfds == 1 && 
+            poll_fds[0].events.contains(PollEvent::IN) && 
+            self.task.get_fd(poll_fds[0].fd as _)
+                .map_or(false, |f| f.path.to_string().contains("tty") || f.path.to_string().contains("uart"));
+        
+        // 对终端输入采用更积极的轮询策略
+        if is_terminal_poll {
+            // 首先检查是否有输入
+            poll_fds[0].revents = self.task.get_fd(poll_fds[0].fd as _)
+                .map_or(PollEvent::NONE, |x| {
+                    match x.inner.poll(poll_fds[0].events.clone()) {
+                        Ok(events) => events,
+                        Err(_) => PollEvent::ERR,
+                    }
+                });
+                
+            if poll_fds[0].revents != PollEvent::NONE {
+                return Ok(1); // 有输入，立即返回
+            }
+            
+            // 对于终端，使用特殊的等待函数
+            // 这个函数使用自旋+短暂让出策略
+            const TERMINAL_POLL_INTERVAL_MS: usize = 20;
+            
+            // 如果有超时，确保不会超过超时时间
+            let wait_time = if has_timeout {
+                let remaining_ns = etime.saturating_sub(current_nsec());
+                let remaining_ms = remaining_ns / 1_000_000;
+                if remaining_ms == 0 {
+                    return Ok(0); // 已超时
+                }
+                remaining_ms.min(TERMINAL_POLL_INTERVAL_MS)
+            } else {
+                TERMINAL_POLL_INTERVAL_MS
+            };
+            
+            // 使用特殊的终端等待函数
+            terminal_wait(wait_time).await;
+            
+            // 再次检查是否有输入
+            poll_fds[0].revents = self.task.get_fd(poll_fds[0].fd as _)
+                .map_or(PollEvent::NONE, |x| {
+                    match x.inner.poll(poll_fds[0].events.clone()) {
+                        Ok(events) => events,
+                        Err(_) => PollEvent::ERR,
+                    }
+                });
+                
+            return Ok(if poll_fds[0].revents != PollEvent::NONE { 1 } else { 0 });
+        }
+        
+        // 对于非终端设备，使用原来的轮询逻辑
+        let mut sleep_time_ms = 10; // 初始睡眠时间为10毫秒
+        let max_sleep_time_ms = 200; // 缩短最大睡眠时间，提高响应性
+        
+        // 轮询循环
+        loop {
+            // 检查所有文件描述符
+            let mut num = 0;
+            for i in 0..nfds {
+                poll_fds[i].revents = self.task.get_fd(poll_fds[i].fd as _)
+                    .map_or(PollEvent::NONE, |x| {
+                        match x.inner.poll(poll_fds[i].events.clone()) {
+                            Ok(events) => events,
+                            Err(_) => PollEvent::ERR, // 错误时返回ERR事件
+                        }
+                    });
+                
+                if poll_fds[i].revents != PollEvent::NONE {
+                    num += 1;
+                }
+            }
+
+            // 如果有事件发生或者超时，则返回
+            if num > 0 || current_nsec() >= etime {
+                return Ok(num);
+            }
+            
+            // 检查超时
+            if timeout_ptr.is_valid() && current_nsec() >= etime {
+                debug!("ppoll 超时");
+                return Ok(0); // 已超时
+            }
+            
+            // 使用指数退避策略，但增长速度较慢，并设置较低的上限
+            sleep_time_ms = (sleep_time_ms * 3 / 2).min(max_sleep_time_ms);
+            
+            // 计算实际睡眠时间
+            let actual_sleep_time = if has_timeout {
+                let remaining_ns = etime.saturating_sub(current_nsec());
+                let remaining_ms = remaining_ns / 1_000_000;
+                
+                if remaining_ms == 0 {
+                    return Ok(0); // 已超时
+                }
+                
+                remaining_ms.min(sleep_time_ms as usize)
+            } else {
+                sleep_time_ms as usize
+            };
+            
+            sleep_for_duration(actual_sleep_time).await;
+        }
+    }
+
+    pub async fn sys_readlinkat(
+        &self,
+        dirfd: isize,
+        pathname: UserBuf<u8>,
+        buf: UserBuf<u8>,
+        bufsiz: usize,
+    ) -> Result<usize, TaskError> {
+        debug!(
+            "sys_readlinkat @ dirfd: {}, pathname: {:?}, buf: {:?}, bufsiz: {}",
+            dirfd, pathname, buf, bufsiz
+        );
+
+        // Check if buffer size is valid
+        if bufsiz == 0 {
+            return Err(TaskError::EINVAL);
+        }
+
+        // Get the pathname string
+        let path_str = pathname.get_cstr();
+        
+        // For now, we'll implement a basic version that handles simple cases
+        // In a full implementation, we would:
+        // 1. Resolve the path relative to dirfd (or current directory if AT_FDCWD)
+        // 2. Check if the target is a symbolic link
+        // 3. Read the link target and copy it to the buffer
+        
+        // For now, return EINVAL to indicate the file is not a symbolic link
+        // This is a placeholder implementation
+        Err(TaskError::EINVAL)
     }
 }

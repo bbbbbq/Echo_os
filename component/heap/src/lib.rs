@@ -58,6 +58,7 @@ pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
     panic!("Heap allocation error, layout = {:?}", layout)
 }
 
+<<<<<<< HEAD
 /// 用户堆管理结构体。
 #[derive(Debug, Clone, Copy)]
 pub struct HeapUser {
@@ -155,3 +156,55 @@ impl HeapUser {
         }
     }
 }
+=======
+// #[derive(Debug)]
+// #[derive(Clone, Copy)]
+// pub struct HeapUser {
+//     pub virt_range: VirtAddrRange,
+// }
+
+// impl HeapUser {
+//     pub fn new(virt_range: VirtAddrRange) -> Self {
+//         assert!(
+//             virt_range.start < virt_range.end,
+//             "Virtual address range start must be less than end"
+//         );
+//         assert!(
+//             virt_range.start.is_aligned_4k(),
+//             "Virtual address start must be 4K aligned"
+//         );
+
+//         Self { virt_range }
+//     }
+
+//     pub fn convert_to_memregion(&self) -> MemRegion {
+//         MemRegion::new_anonymous(
+//             self.virt_range.start,
+//             self.virt_range.end,
+//             MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE,
+//             "user_heap".to_string(),
+//             MemRegionType::HEAP,
+//         )
+//     }
+
+//     pub fn get_end(&self) -> usize {
+//         self.virt_range.end.as_usize()
+//     }
+
+//     pub fn sbrk(&mut self, increment: usize,pagetable:&mut PageTable) -> usize{
+//         let pages = increment.div_ceil(PAGE_SIZE.try_into().unwrap());
+//         let new_end = self.virt_range.end.add(pages * PAGE_SIZE);
+//         let old_end = self.virt_range.end;
+//         let mut new_region = MemRegion::new_anonymous(
+//             old_end,
+//             new_end,
+//             MappingFlags::USER | MappingFlags::READ | MappingFlags::WRITE,
+//             "user_heap_sbrk".to_string(),
+//             MemRegionType::HEAP,
+//         );
+//         pagetable.map_region_user_frame(&mut new_region);
+//         self.virt_range.end = new_end;
+//         new_end.as_usize()
+//     }
+// }
+>>>>>>> 73599fce51808454c7e446d9fc82074df6e31d3d
